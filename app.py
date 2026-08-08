@@ -14,6 +14,22 @@ st.set_page_config(
     layout="wide"
 )
 
+# DEFENSE: Hide default Streamlit loading indicators and branding
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            
+            /* Optional: Adjust top padding to make it look flush and native */
+            .block-container {
+                padding-top: 2rem;
+                padding-bottom: 0rem;
+            }
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
+
 # ==========================================
 # 2. DATA SECURITY (Authentication)
 # ==========================================
