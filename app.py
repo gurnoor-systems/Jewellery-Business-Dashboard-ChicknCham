@@ -28,8 +28,42 @@ hide_st_style = """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
 # ==========================================
-# 2. DASHBOARD PRESENTATION
+# 2. SECURITY WALL
 # ==========================================
+
+def check_password():
+    """Returns True if the user entered the correct password."""
+    
+    def password_entered():
+        """Checks whether the password entered matches the secret."""
+        if st.session_state["password"] == st.secrets["admin"]["password"]:
+            st.session_state["password_correct"] = True
+            # Delete the password from the session state for security
+            del st.session_state["password"]  
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        # First run: Show the password input
+        st.markdown("### 🔐 Secure Login Required")
+        st.text_input("Enter Admin Password", type="password", on_change=password_entered, key="password")
+        return False
+        
+    elif not st.session_state["password_correct"]:
+        # Incorrect password: Show input and error message
+        st.markdown("### 🔐 Secure Login Required")
+        st.text_input("Enter Admin Password", type="password", on_change=password_entered, key="password")
+        st.error("🚫 Access Denied: Incorrect Password")
+        return False
+        
+    else:
+        # Password correct: Grant access
+        return True
+
+# ==========================================
+# 3. DASHBOARD PRESENTATION
+# ==========================================
+
 def main():
     st.title("💎 Chick n Cham by laddi")
     st.markdown("### Operations & Intelligence Command Center")
@@ -134,4 +168,5 @@ def main():
         st.error(f"Database Connection Error: {e}")
 
 if __name__ == "__main__":
-    main()
+    if check_password():
+        main()
