@@ -22,6 +22,39 @@ def engine_cost_profitability(df_sales, df_sourcing):
     
     return total_sales, true_profit, top_performer, dead_stock_capital
 
+def engine_cac_mom_growth(df_sales, weekly_marketing_spend):
+    """
+    Calculates Customer Acquisition Cost (CAC) for the last 7 days 
+    and overall Month-over-Month (MoM) Revenue Growth.
+    """
+    df_paid = df_sales[df_sales['Payment Status'] == 'Paid (UPI/Bank)'].copy()
+    
+    if df_paid.empty:
+        return 0.0, 0, 0.0
+
+    # 1. Customer Acquisition Cost (CAC)
+    if 'Date of Sale' in df_paid.columns and pd.api.types.is_datetime64_any_dtype(df_paid['Date of Sale']):
+        cutoff = pd.Timestamp.today() - pd.Timedelta(days=7)
+        recent_sales = df_paid[df_paid['Date of Sale'] >= cutoff]
+    else:
+        recent_sales = pd.DataFrame()
+        
+    new_clients_acquired = recent_sales['Instagram/Facebook Handle'].nunique() if not recent_sales.empty else 0
+    
+    # Calculate CAC
+    cac = (weekly_marketing_spend / new_clients_acquired) if new_clients_acquired > 0 else weekly_marketing_spend
+    
+    # 2. Month-over-Month (MoM) Growth
+    mom_growth = 0.0
+    if 'Date of Sale' in df_paid.columns and pd.api.types.is_datetime64_any_dtype(df_paid['Date of Sale']):
+        df_paid['Month'] = df_paid['Date of Sale'].dt.to_period('M')
+        monthly_rev = df_paid.groupby('Month')['Total Amount Client Paid You'].sum()
+        
+        if len(monthly_rev) >= 2:
+            mom_growth = monthly_rev.pct_change().iloc[-1] * 100.0
+            
+    return cac, new_clients_acquired, mom_growth
+
 def generate_financial_charts(df_sales):
     """
     Generates interactive Plotly charts for the Financial Command Center:

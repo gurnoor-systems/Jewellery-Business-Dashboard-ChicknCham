@@ -1,6 +1,6 @@
 import streamlit as st
 from data.ingestion import load_data
-from engines.financials import engine_cost_profitability, generate_financial_charts
+from engines.financials import engine_cost_profitability, generate_financial_charts, engine_cac_mom_growth
 from engines.crm import engine_vip_loyalty
 from engines.invoicing import engine_automated_invoicing
 
@@ -67,7 +67,18 @@ def check_password():
 def main():
     st.title("💎 Chick n Cham by laddi")
     st.markdown("### Operations & Intelligence Command Center")
-    
+
+    with st.sidebar:
+        st.header("📈 Marketing Controls 📈")
+        st.markdown("Enter your recent ad/packaging spend to calculate acquisition costs.")
+
+        weekly_spend = st.number_input(
+            "Weekly Ad Spend (₹)", 
+            min_value=0.0, 
+            value=2000.0,
+            help="Enter any amount. Type directly or use arrows."
+        )
+        
     try:
         with st.spinner("Syncing secure database..."):
             df_sales, df_sourcing = load_data()
@@ -81,8 +92,34 @@ def main():
         with tab1:
             st.subheader("Financial Command Center")
             if not df_sales.empty and not df_sourcing.empty:
+                # 1. Run core calculations
                 sales, profit, top_item, dead_capital = engine_cost_profitability(df_sales, df_sourcing)
+                cac, new_clients, mom = engine_cac_mom_growth(df_sales, weekly_spend)
+
+                # 2. Defensive Input Checks & Feedback
+                if weekly_spend == 0:
+                    st.info("🌱 Organic Growth")
+                elif weekly_spend > 10_000_000:
+                    st.error("🚨 The amount entered is exceptionally high (over ₹1 Cr). Please verify the value in the sidebar.")
+
+                # 3. Growth & Acquisition Section
+                st.markdown("##### 🚀 Growth & Acquisition (Last 7 Days)")
+                metric_col1, metric_col2, metric_col3 = st.columns(3)
+                metric_col1.metric("MoM Revenue Growth", f"{mom:,.1f}%", delta=f"{mom:,.1f}%", delta_color="normal")
+                metric_col2.metric("New Clients Acquired", new_clients)
+
+                if weekly_spend > 0:
+                    ui_cac_label = f"₹{cac:,.2f}"
+                    wa_cac_label = f"₹{cac:,.2f}"
+                else:
+                    ui_cac_label = ":green[₹0 (Organic) 🌿]" 
+                    wa_cac_label = "₹0 (Organic)"
+   
+                metric_col3.metric("Customer Acquisition Cost (CAC)", ui_cac_label, delta="Spend per Client", delta_color="inverse")
                 
+                st.divider()
+
+                # 4. Core Financial KPIs
                 col1, col2, col3, col4 = st.columns(4)
                 col1.metric("Realized Revenue", f"₹{sales:,.0f}")
                 col2.metric("True Net Profit", f"₹{profit:,.0f}")
@@ -90,7 +127,8 @@ def main():
                 col4.metric("⚠️ 45-Day Dead Stock", f"₹{dead_capital:,.0f}", delta="Capital Trapped", delta_color="inverse")
                 
                 st.divider()
-                
+
+                # 5. Interactive Charts
                 fig_trend, fig_donut = generate_financial_charts(df_sales)
                 if fig_trend and fig_donut:
                     chart_col1, chart_col2 = st.columns([3, 2])
@@ -106,6 +144,8 @@ def main():
                     f"📊 *Weekly Operations Update*\n"
                     f"Total Sales: ₹{sales:,.0f}\n"
                     f"True Profit: ₹{profit:,.0f}\n"
+                    f"🚀 MoM Growth: {mom:,.1f}%\n"
+                    f"🎯 CAC: {wa_cac_label}/client (₹{weekly_spend:,.2f} total spend)\n"
                     f"🔥 Top Performer: {top_item}\n"
                     f"⚠️ Note: You have ₹{dead_capital:,.0f} tied up in stock older than 45 days. Consider discounting older pieces on the next live!"
                 )
