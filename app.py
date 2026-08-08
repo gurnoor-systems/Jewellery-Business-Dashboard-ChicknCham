@@ -114,8 +114,8 @@ def main():
                 else:
                     ui_cac_label = "₹0 (Organic) 🌿" 
                     wa_cac_label = "₹0 (Organic)"
-   
-                metric_col3.metric("Customer Acquisition Cost (CAC)", ui_cac_label, delta="Spend per Client", delta_color="inverse")
+                    cac_delta = "Spend per Client"
+                metric_col3.metric("Customer Acquisition Cost (CAC)", ui_cac_label, delta=cac_delta, delta_color="inverse")
                 
                 st.divider()
 
