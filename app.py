@@ -111,6 +111,7 @@ def main():
                 if weekly_spend > 0:
                     ui_cac_label = f"₹{cac:,.2f}"
                     wa_cac_label = f"₹{cac:,.2f}"
+                    cac_delta = "Spend per Client"
                 else:
                     ui_cac_label = "₹0 (Organic) 🌿" 
                     wa_cac_label = "₹0 (Organic)"
