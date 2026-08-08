@@ -112,7 +112,7 @@ def main():
                     ui_cac_label = f"₹{cac:,.2f}"
                     wa_cac_label = f"₹{cac:,.2f}"
                 else:
-                    ui_cac_label = ":green[₹0 (Organic) 🌿]" 
+                    ui_cac_label = "₹0 (Organic) 🌿" 
                     wa_cac_label = "₹0 (Organic)"
    
                 metric_col3.metric("Customer Acquisition Cost (CAC)", ui_cac_label, delta="Spend per Client", delta_color="inverse")
