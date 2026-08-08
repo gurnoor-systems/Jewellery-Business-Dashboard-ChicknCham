@@ -1,6 +1,6 @@
 import streamlit as st
 from data.ingestion import load_data
-from engines.financials import engine_cost_profitability
+from engines.financials import engine_cost_profitability, generate_financial_charts
 from engines.crm import engine_vip_loyalty
 from engines.invoicing import engine_automated_invoicing
 
@@ -90,6 +90,16 @@ def main():
                 col4.metric("⚠️ 45-Day Dead Stock", f"₹{dead_capital:,.0f}", delta="Capital Trapped", delta_color="inverse")
                 
                 st.divider()
+                
+                fig_trend, fig_donut = generate_financial_charts(df_sales)
+                if fig_trend and fig_donut:
+                    chart_col1, chart_col2 = st.columns([3, 2])
+                    with chart_col1:
+                        st.plotly_chart(fig_trend, use_container_width=True)
+                    with chart_col2:
+                        st.plotly_chart(fig_donut, use_container_width=True)
+                    st.divider()
+
                 st.markdown("#### 📱 Weekly WhatsApp Summary")
                 st.info("Copy this summary to send directly to the business owner.")
                 summary_text = (
