@@ -1,0 +1,23 @@
+# Streamlit Secrets (CRITICAL: Do NOT commit real credentials)
+.streamlit/secrets.toml
+
+# Local Service Account JSON files (if downloaded locally)
+*.json
+
+# Python Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Python Cache & Build Files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# OS and IDE specific files
+.DS_Store
+.vscode/
+.idea/
+Thumbs.db
