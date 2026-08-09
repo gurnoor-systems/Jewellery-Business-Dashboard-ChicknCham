@@ -115,8 +115,8 @@ def main():
                     wa_cac_label = f"₹{cac:,.2f}"
                     cac_delta = "Spend per Client"
                 else:
-                    ui_cac_label = "₹0 (Organic) 🌿" 
-                    wa_cac_label = "₹0 (Organic)"
+                    ui_cac_label = "₹0 " 
+                    wa_cac_label = "₹0 "
                     cac_delta = "Spend per Client"
                 metric_col3.metric("Customer Acquisition Cost (CAC)", ui_cac_label, delta=cac_delta, delta_color="inverse")
                 
