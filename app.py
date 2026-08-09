@@ -3,6 +3,7 @@ from data.ingestion import load_data
 from engines.financials import engine_cost_profitability, generate_financial_charts, engine_cac_mom_growth
 from engines.crm import engine_vip_loyalty
 from engines.invoicing import engine_automated_invoicing
+from engines.marketing import generate_instagram_captions
 
 # ==========================================
 # 1. UI/UX & SYSTEM CONFIGURATION
@@ -66,31 +67,32 @@ def check_password():
 
 def main():
     st.title("💎 Chick n Cham by laddi")
-    st.markdown("### Operations & Intelligence Command Center")
+    st.markdown("### Current Operations")
 
     with st.sidebar:
         st.header("📈 Marketing Controls 📈")
-        st.markdown("Enter your recent ad/packaging spend to calculate acquisition costs.")
+        st.markdown("Enter your recent advertising spend to calculate acquisition costs.")
 
         weekly_spend = st.number_input(
             "Weekly Ad Spend (₹)", 
             min_value=0.0, 
-            value=2000.0,
+            value=1500.0,
             help="Enter any amount. Type directly or use arrows."
         )
         
     try:
-        with st.spinner("Syncing secure database..."):
+        with st.spinner("Syncing secure database.."):
             df_sales, df_sourcing = load_data()
             
-        tab1, tab2, tab3 = st.tabs([
+        tab1, tab2, tab3, tab4 = st.tabs([
             "📊 Profitability Engine", 
-            "👑 VIP Loyalty Dashboard", 
-            "🧾 Invoicing & Automation"
+            "👑 Loyalty Dashboard", 
+            "🧾 Invoice Generator",
+            "🎨 Marketing Content Generator"
         ])
         
         with tab1:
-            st.subheader("Financial Command Center")
+            st.subheader("Current Financial Health")
             if not df_sales.empty and not df_sourcing.empty:
                 # 1. Run core calculations
                 sales, profit, top_item, dead_capital = engine_cost_profitability(df_sales, df_sourcing)
@@ -182,7 +184,9 @@ def main():
                     repeat_rate = (repeat_count / total_clients) * 100 if total_clients > 0 else 0
                     st.metric(label="Total Repeat Buyers", value=repeat_count)
                     st.metric(label="Repeat Customer Rate", value=f"{repeat_rate:.1f}%")
-                    st.info("Message the top 3 clients on this list whenever a new Sadar shipment arrives. Converting these existing buyers costs ₹0 in marketing.")
+                    st.info("Message the top 3 clients on this list whenever the new stock arrives. "
+                    "Converting these existing buyers cost zero in marketing.")
+
             else:
                 st.warning("No sales data available yet to generate VIP list.")
             
@@ -214,6 +218,31 @@ def main():
                             )
             else:
                 st.info("No recent valid orders found to invoice.")
+        
+        with tab4:
+            st.subheader("✨ AI Caption Generator")
+            st.markdown("Instantly generating engaging Instagram copy and hashtags for your latest drops.")
+            
+            with st.container(border=True):
+                col1, col2 = st.columns([1, 1])
+                
+                with col1:
+                    prod_name = st.text_input("Product Name", placeholder="e.g., Heavy Kundan Bridal Set")
+                    prod_price = st.number_input("Listing Price (₹)", min_value=0.0, step=100.0)
+                    
+                with col2:
+                    prod_features = st.text_area("Key Features (Materials, Colors, Style)", placeholder="e.g., Mint green stones, gold-plated, perfect for weddings, lightweight")
+                    
+                submit_ai = st.button("🚀 Generate Captions", type="primary", use_container_width=True)
+                
+            if submit_ai:
+                if prod_name and prod_features:
+                    with st.spinner("Brainstorming .."):
+                        generated_text = generate_instagram_captions(prod_name, prod_price, prod_features)
+                        st.success("Captions Generated!")
+                        st.markdown(generated_text)
+                else:
+                    st.warning("Please provide a product name and some features so the AI knows what to write about.")
             
     except Exception as e:
         st.error(f"Database Connection Error: {e}")
