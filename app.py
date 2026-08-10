@@ -3,7 +3,7 @@ import streamlit as st
 
 # Data Imports
 
-from data.ingestion import load_data
+from data.ingestion import load_data, load_sourcing_vault
 from data.storage import upload_to_cloudinary
 from data.sourcing import compress_image, save_to_sourcing_vault
 
@@ -13,6 +13,7 @@ from engines.financials import engine_cost_profitability, generate_financial_cha
 from engines.crm import engine_vip_loyalty
 from engines.invoicing import engine_automated_invoicing
 from engines.marketing import generate_instagram_captions
+from engines.live_match import analyze_live_item, find_vault_match
 
 # SKU Unique Identifier Generator
 
@@ -97,12 +98,13 @@ def main():
         with st.spinner("Syncing secure database.."):
             df_sales, df_sourcing = load_data()
             
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
             "📊 Profitability Engine", 
             "👑 Loyalty Dashboard", 
             "🧾 Invoice Generator",
             "🎨 Marketing Content Generator",
-            "📸 Jewelery Vault"
+            "📸 Jewelery Vault",
+            "🔴 LIVE MATCH"
         ])
         
         with tab1:
@@ -258,56 +260,166 @@ def main():
                     st.warning("Please provide a product name and some features so the AI knows what to write about.")
 
         with tab5:
-            st.subheader("📸 Mobile Jewelry Vault")
-            st.markdown("Snap photos of inventory during sourcing trip to log buying prices instantly.")
-            
-            # Retrieve Folder ID from secrets
-            folder_id = st.secrets.get("drive", {}).get("folder_id", "YOUR_DRIVE_FOLDER_ID")
-            
-            with st.container(border=True):
-                col1, col2 = st.columns([1, 1])
-                
-                with col1:
-                    # Native camera input for smartphones / laptops
-                    camera_photo = st.camera_input("Take Photo of Jewel Piece")
-                    uploaded_photo = st.file_uploader("Or upload from gallery", type=["jpg", "png", "jpeg"])
-                    
-                    # Pick whichever image source was used
-                    active_photo = camera_photo or uploaded_photo
+            st.subheader("📸 Mobile Sourcing Vault")
+            st.caption("Catalog inventory on sourcing trips with instant price previews and automatic cloud sync.")
 
-                with col2:
-                    st.markdown("##### 📝 Item Details")
-                    sourcing_price = st.number_input("Sourcing / Buying Price (₹)", min_value=0.0, step=50.0, value=500.0)
-                    item_tags = st.text_input("Tags / Attributes", placeholder="e.g., Mint Green Kundan Choker, Heavy Set")
-                    
-                    # Auto-generate a unique SKU based on timestamp
-                    
-                    generated_sku = f"JK-{int(time.time())}-{uuid.uuid4().hex[:4].upper()}"
-                    st.caption(f"Generated SKU: **{generated_sku}**")
-                    
-                    save_btn = st.button("💾 Save to Vault", type="primary", use_container_width=True)
+            # Main Ingestion Container
+            with st.container(border=True):
+                col_capture, col_form = st.columns([1, 1], gap="medium")
+
+                # Distinct Bordered Container 1
+                with col_capture:
+                    with st.container(border=True):
+                        st.markdown("##### 📸 Capture Media")
+                        camera_photo = st.camera_input("Take Photo", key="vault_cam")
+                        uploaded_photo = st.file_uploader("Or upload high-res image", type=["jpg", "png", "jpeg"], key="vault_upload")
+                        active_photo = camera_photo or uploaded_photo
+
+                # Distinct Bordered Container 2
+                with col_form:
+                    with st.container(border=True):
+                        st.markdown("##### 📝 Item Details")
+                
+                        category = st.selectbox("Category", ["Choker Set", "Earrings", "Bangles", "Polki", "Kundan", "Other"], key="vault_cat")
+                        sourcing_price = st.number_input("Sourcing Price (₹)", min_value=0.0, step=50.0, value=500.0, key="vault_price")
+                        raw_tags = st.text_input("Additional Tags", placeholder="e.g., Mint Green, Pearl Drops", key="vault_tags")
+                        combined_tags = f"{category}, {raw_tags}" if raw_tags else category
+                
+                        st.divider()
+                        st.markdown("##### 💡 Custom Selling Prices")
+                        st.caption("Edit these calculated targets to save custom prices to the vault.")
+                
+                        p_col1, p_col2, p_col3 = st.columns(3)
+                        custom_std = p_col1.number_input("Standard", value=float(sourcing_price * 1.8), step=10.0)
+                        custom_vip = p_col2.number_input("VIP", value=float(sourcing_price * 1.5), step=10.0)
+                        custom_clr = p_col3.number_input("Clearance", value=float(sourcing_price * 1.2), step=10.0)
+
+                        generated_sku = f"JK-{int(time.time())}-{uuid.uuid4().hex[:4].upper()}"
+                
+                        # Note: You will need to update data/sourcing.py to accept and save these 3 new custom price variables
+                        save_btn = st.button("💾 Save to Vault", type="primary", use_container_width=True, key="save_vault_btn")
 
             if save_btn and active_photo:
-                with st.spinner("Compressing & uploading.."):
-                    # 1. Read bytes & compress image
+                with st.spinner("Processing image, Please wait.."):
                     raw_bytes = active_photo.getvalue()
                     compressed_bytes = compress_image(raw_bytes)
-
-                    # 2. Uploading compressed photo to Cloudinary
                     cdn_url = upload_to_cloudinary(compressed_bytes, generated_sku)
-                    
+
                     if "🚨" not in cdn_url:
-                        # Capture the True/False result of the Google Sheet update
-                        is_saved = save_to_sourcing_vault(generated_sku, sourcing_price, item_tags, cdn_url)
-                        
-                        # Only show success if the Google Sheet update was successful
+                        is_saved = save_to_sourcing_vault(generated_sku, sourcing_price, combined_tags, cdn_url)
                         if is_saved:
-                            st.success(f"✅ Saved successfully! SKU: {generated_sku}")
-                            st.markdown(f"[🔗 View Image on CDN]({cdn_url})")
+                            st.toast(f"✅ Saved {generated_sku} to Vault!", icon="🎉")
                         else:
-                            st.warning("⚠️ Image uploaded to CDN, but failed to log to Google Sheets.")
+                            st.error("⚠️ Failed to update Google Sheet ledger.")
                     else:
                         st.error(cdn_url)
+
+            # 3. Recently Cataloged Mini-Gallery
+            st.divider()
+            st.markdown("##### 🕒 Recently Cataloged Inventory")
+            vault_df = load_sourcing_vault()
+            if not vault_df.empty:
+                recent_items = vault_df.tail(4).iloc[::-1] # Get last 4 items
+                g_cols = st.columns(len(recent_items))
+                for idx, (_, item) in enumerate(recent_items.iterrows()):
+                    with g_cols[idx]:
+                        st.image(item['image_url'], use_container_width=True)
+                        st.caption(f"**{item['Item_SKU']}**\nCost: ₹{item['Sourcing_Price']}")
+
+            with tab6:
+                st.subheader("🔴 Live Broadcast Assistant")
+                st.caption("Scan items on camera or run manual searches to instantly pull sourcing costs and quotes.")
+
+                # Low-Network Toggle Switch
+                low_net_mode = st.toggle("📶 Low-Network Mode (Disable Camera)", key="low_net_toggle")
+
+                vault_df = load_sourcing_vault()
+                match = None
+                live_bytes = None
+
+                with st.container(border=True):
+                    if not low_net_mode:
+                        live_camera = st.camera_input("📸 Scan Jewelry Piece", key="live_match_cam")
+                        if live_camera:
+                            live_bytes = live_camera.getvalue()
+                    else:
+                        st.info("📶 Low-network mode active. Camera disabled to save bandwidth.")
+                        live_camera = None
+
+                    manual_search = st.text_input(
+                        "🔍 Manual Search Fallback", 
+                        placeholder="Search by color, type, or style (e.g., 'Mint Green Choker')...",
+                        key="manual_match_input"
+                    )
+
+                # Execution Logic
+                if live_camera and not manual_search:
+                    with st.spinner("🧠 AI Analyzing visual attributes..."):
+                        ai_tags = analyze_live_item(live_bytes)
+                        if "🚨" not in ai_tags:
+                            st.info(f"🧠 **AI Visual Analysis:** `{ai_tags}`")
+                            match = find_vault_match(ai_tags, vault_df)
+                        else:
+                            st.error(ai_tags)
+
+                elif manual_search:
+                    match = find_vault_match(manual_search, vault_df)
+
+                # Output Presentation Card
+                if match is not None:
+                    st.divider()
+                    st.markdown(
+                        '<div style="background-color:#e8f5e9; padding:8px 16px; border-radius:8px; border:1px solid #c8e6c9;">'
+                        '<span style="color:#2e7d32; font-weight:bold; font-size:16px;">🟢 Match Confirmed in Vault</span>'
+                        '</div>', 
+                        unsafe_allow_html=True
+                    )
+                    st.write("")
+
+                    with st.container(border=True):
+                        # Side-by-Side Visual Verification
+                        col_live, col_vault, col_pricing = st.columns([1, 1, 1.5], gap="large")
+
+                        with col_live:
+                            st.markdown("**Scanned Feed**")
+                            if live_bytes:
+                                st.image(live_bytes, use_container_width=True)
+                            else:
+                                st.caption("Manual Search Mode")
+
+                        with col_vault:
+                            st.markdown("**Database Record**")
+                            st.image(match['image_url'], use_container_width=True)
+                            st.caption(f"SKU: `{match['Item_SKU']}`")
+
+                        with col_pricing:
+
+                            with col_pricing:
+                                cost_price = float(match['Sourcing_Price'])
+                                st.metric("Sourcing Cost", f"₹{cost_price:,.2f}")
+                                st.caption(f"**Tags:** {match['tags']}")
+                                st.divider()
+
+                                st.markdown("##### 📋 Tap to Copy Quotes")
+                
+                                # Pulls custom prices if they exist in the DB, otherwise falls back to math
+                                std_quote = match.get('Standard_Price', cost_price * 1.8)
+                                vip_quote = match.get('VIP_Price', cost_price * 1.5)
+                                clr_quote = match.get('Clearance_Price', cost_price * 1.2)
+
+                                c1, c2, c3 = st.columns(3)
+                                with c1:
+                                    st.caption("Standard")
+                                    st.code(f"₹{std_quote:,.0f}", language="markdown")
+                                with c2:
+                                    st.caption("VIP Client")
+                                    st.code(f"₹{vip_quote:,.0f}", language="markdown")
+                                with c3:
+                                    st.caption("Clearance")
+                                    st.code(f"₹{clr_quote:,.0f}", language="markdown")
+
+                elif (live_camera or manual_search) and match is None:
+                    st.warning("⚠️ No matching item found in the Sourcing Vault. Verify search tags or check inventory log.")
 
     except Exception as e:
         st.error(f"Database Connection Error: {e}")
