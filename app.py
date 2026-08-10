@@ -412,10 +412,21 @@ def main():
 
                                 st.markdown("##### 📋 Tap to Copy Quotes")
                 
-                                # Pulls custom prices if they exist in the DB, otherwise falls back to math
-                                std_quote = match.get('Standard_Price', cost_price * 1.8)
-                                vip_quote = match.get('VIP_Price', cost_price * 1.5)
-                                clr_quote = match.get('Clearance_Price', cost_price * 1.2)
+                                def safe_quote(col_name, multiplier):
+                                    val = match.get(col_name)
+                                    import pandas as pd
+                                    # If cell is missing, NaN, or a blank string, fallback to math
+                                    if pd.isna(val) or str(val).strip() == "":
+                                        return cost_price * multiplier
+                                    try:
+                                        return float(val)
+                                    except ValueError:
+                                        return cost_price * multiplier
+
+                                # Safely parse the quotes
+                                std_quote = safe_quote('Standard_Price', 1.8)
+                                vip_quote = safe_quote('VIP_Price', 1.5)
+                                clr_quote = safe_quote('Clearance_Price', 1.2)
 
                                 c1, c2, c3 = st.columns(3)
                                 with c1:
