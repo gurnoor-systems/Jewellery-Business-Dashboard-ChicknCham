@@ -1,4 +1,5 @@
 import time
+import uuid
 import streamlit as st
 
 # Data Imports
@@ -17,7 +18,6 @@ from engines.live_match import analyze_live_item, find_vault_match
 
 # SKU Unique Identifier Generator
 
-import uuid
 
 # ==========================================
 # 1. UI/UX & SYSTEM CONFIGURATION
@@ -296,17 +296,26 @@ def main():
 
                         generated_sku = f"JK-{int(time.time())}-{uuid.uuid4().hex[:4].upper()}"
                 
-                        # Note: You will need to update data/sourcing.py to accept and save these 3 new custom price variables
                         save_btn = st.button("💾 Save to Vault", type="primary", use_container_width=True, key="save_vault_btn")
 
             if save_btn and active_photo:
-                with st.spinner("Processing image, Please wait.."):
+                with st.spinner("Compressing image & updating Vault..."):
                     raw_bytes = active_photo.getvalue()
                     compressed_bytes = compress_image(raw_bytes)
                     cdn_url = upload_to_cloudinary(compressed_bytes, generated_sku)
 
                     if "🚨" not in cdn_url:
-                        is_saved = save_to_sourcing_vault(generated_sku, sourcing_price, combined_tags, cdn_url)
+                        # FIX: Now passing all 7 variables to the backend
+                        is_saved = save_to_sourcing_vault(
+                            generated_sku, 
+                            sourcing_price, 
+                            combined_tags, 
+                            cdn_url, 
+                            custom_std, 
+                            custom_vip, 
+                            custom_clr
+                        )
+                
                         if is_saved:
                             st.toast(f"✅ Saved {generated_sku} to Vault!", icon="🎉")
                         else:
@@ -315,6 +324,7 @@ def main():
                         st.error(cdn_url)
 
             # 3. Recently Cataloged Mini-Gallery
+            
             st.divider()
             st.markdown("##### 🕒 Recently Cataloged Inventory")
             vault_df = load_sourcing_vault()
@@ -323,7 +333,7 @@ def main():
                 g_cols = st.columns(len(recent_items))
                 for idx, (_, item) in enumerate(recent_items.iterrows()):
                     with g_cols[idx]:
-                        st.image(item['image_url'], use_container_width=True)
+                        st.image(item['image_url'], use_column_width=True)
                         st.caption(f"**{item['Item_SKU']}**\nCost: ₹{item['Sourcing_Price']}")
 
             with tab6:
@@ -383,13 +393,13 @@ def main():
                         with col_live:
                             st.markdown("**Scanned Feed**")
                             if live_bytes:
-                                st.image(live_bytes, use_container_width=True)
+                                st.image(live_bytes, use_column_width=True)
                             else:
                                 st.caption("Manual Search Mode")
 
                         with col_vault:
                             st.markdown("**Database Record**")
-                            st.image(match['image_url'], use_container_width=True)
+                            st.image(match['image_url'], use_column_width=True)
                             st.caption(f"SKU: `{match['Item_SKU']}`")
 
                         with col_pricing:

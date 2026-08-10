@@ -14,9 +14,9 @@ def compress_image(image_bytes, max_size=(800, 800), quality=80):
     img.save(buffer, format="JPEG", quality=quality)
     return buffer.getvalue()
 
-def save_to_sourcing_vault(sku, price, tags, image_url):
+def save_to_sourcing_vault(sku, price, tags, image_url, std_price, vip_price, clr_price):
     """
-    Appends a new cataloged item to the 'Sourcing_Vault' tab in Google Sheets.
+    Appends a new cataloged item and custom pricing to the Sourcing_Vault tab.
     """
     try:
         # 1. Prepare clean GCP credentials
@@ -39,7 +39,7 @@ def save_to_sourcing_vault(sku, price, tags, image_url):
             sh = client_gspread.open("Jewelry Business DB")
             
         sheet = sh.worksheet("Sourcing_Vault")
-        sheet.append_row([sku, price, tags, image_url])
+        sheet.append_row([sku, price, tags, image_url, std_price, vip_price, clr_price])
         return True
         
     except gspread.exceptions.SpreadsheetNotFound:
