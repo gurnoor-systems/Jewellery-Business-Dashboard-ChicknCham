@@ -1,9 +1,22 @@
+import time
 import streamlit as st
+
+# Data Imports
+
 from data.ingestion import load_data
+from data.storage import upload_to_cloudinary
+from data.sourcing import compress_image, save_to_sourcing_vault
+
+# Engine Imports
+
 from engines.financials import engine_cost_profitability, generate_financial_charts, engine_cac_mom_growth
 from engines.crm import engine_vip_loyalty
 from engines.invoicing import engine_automated_invoicing
 from engines.marketing import generate_instagram_captions
+
+# SKU Unique Identifier Generator
+
+import uuid
 
 # ==========================================
 # 1. UI/UX & SYSTEM CONFIGURATION
@@ -76,7 +89,7 @@ def main():
         weekly_spend = st.number_input(
             "Weekly Ad Spend (₹)", 
             min_value=0.0, 
-            value=1500.0,
+            value=0.0,
             help="Enter any amount. Type directly or use arrows."
         )
         
@@ -84,11 +97,12 @@ def main():
         with st.spinner("Syncing secure database.."):
             df_sales, df_sourcing = load_data()
             
-        tab1, tab2, tab3, tab4 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
             "📊 Profitability Engine", 
             "👑 Loyalty Dashboard", 
             "🧾 Invoice Generator",
-            "🎨 Marketing Content Generator"
+            "🎨 Marketing Content Generator",
+            "📸 Jewelery Vault"
         ])
         
         with tab1:
@@ -99,10 +113,9 @@ def main():
                 cac, new_clients, mom = engine_cac_mom_growth(df_sales, weekly_spend)
 
                 # 2. Defensive Input Checks & Feedback
-                if weekly_spend == 0:
-                    st.info("🌱 Organic Growth")
-                elif weekly_spend > 10_000_000:
-                    st.error("🚨 The amount entered is exceptionally high (over ₹1 Cr). Please verify the value in the sidebar.")
+
+                if weekly_spend > 1_00_000:
+                    st.error("🚨 The amount entered is exceptionally high (over ₹1 Lakh). Please verify the value in the sidebar.")
 
                 # 3. Growth & Acquisition Section
                 st.markdown("##### 🚀 Growth & Acquisition (Last 7 Days)")
@@ -243,7 +256,59 @@ def main():
                         st.markdown(generated_text)
                 else:
                     st.warning("Please provide a product name and some features so the AI knows what to write about.")
+
+        with tab5:
+            st.subheader("📸 Mobile Jewelry Vault")
+            st.markdown("Snap photos of inventory during sourcing trip to log buying prices instantly.")
             
+            # Retrieve Folder ID from secrets
+            folder_id = st.secrets.get("drive", {}).get("folder_id", "YOUR_DRIVE_FOLDER_ID")
+            
+            with st.container(border=True):
+                col1, col2 = st.columns([1, 1])
+                
+                with col1:
+                    # Native camera input for smartphones / laptops
+                    camera_photo = st.camera_input("Take Photo of Jewel Piece")
+                    uploaded_photo = st.file_uploader("Or upload from gallery", type=["jpg", "png", "jpeg"])
+                    
+                    # Pick whichever image source was used
+                    active_photo = camera_photo or uploaded_photo
+
+                with col2:
+                    st.markdown("##### 📝 Item Details")
+                    sourcing_price = st.number_input("Sourcing / Buying Price (₹)", min_value=0.0, step=50.0, value=500.0)
+                    item_tags = st.text_input("Tags / Attributes", placeholder="e.g., Mint Green Kundan Choker, Heavy Set")
+                    
+                    # Auto-generate a unique SKU based on timestamp
+                    
+                    generated_sku = f"JK-{int(time.time())}-{uuid.uuid4().hex[:4].upper()}"
+                    st.caption(f"Generated SKU: **{generated_sku}**")
+                    
+                    save_btn = st.button("💾 Save to Vault", type="primary", use_container_width=True)
+
+            if save_btn and active_photo:
+                with st.spinner("Compressing & uploading.."):
+                    # 1. Read bytes & compress image
+                    raw_bytes = active_photo.getvalue()
+                    compressed_bytes = compress_image(raw_bytes)
+
+                    # 2. Uploading compressed photo to Cloudinary
+                    cdn_url = upload_to_cloudinary(compressed_bytes, generated_sku)
+                    
+                    if "🚨" not in cdn_url:
+                        # Capture the True/False result of the Google Sheet update
+                        is_saved = save_to_sourcing_vault(generated_sku, sourcing_price, item_tags, cdn_url)
+                        
+                        # Only show success if the Google Sheet update was successful
+                        if is_saved:
+                            st.success(f"✅ Saved successfully! SKU: {generated_sku}")
+                            st.markdown(f"[🔗 View Image on CDN]({cdn_url})")
+                        else:
+                            st.warning("⚠️ Image uploaded to CDN, but failed to log to Google Sheets.")
+                    else:
+                        st.error(cdn_url)
+
     except Exception as e:
         st.error(f"Database Connection Error: {e}")
 
