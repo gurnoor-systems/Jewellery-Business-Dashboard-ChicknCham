@@ -36,6 +36,10 @@ hide_st_style = """
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
             header {visibility: hidden;}
+            /* Hides the top-right GitHub / Toolbar menu */
+            [data-testid="stToolbar"] {visibility: hidden !important;}
+            /* Hides the "Manage App" button at the bottom right */
+            [data-testid="stAppDeployButton"] {display: none !important;}
             .block-container {
                 padding-top: 2rem;
                 padding-bottom: 0rem;
