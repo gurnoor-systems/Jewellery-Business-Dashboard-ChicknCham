@@ -25,7 +25,7 @@ from engines.live_match import analyze_live_item, find_vault_match
 # 1. UI/UX & SYSTEM CONFIGURATION
 # ==========================================
 st.set_page_config(
-    page_title="Chick n Cham by laddi 💎", 
+    page_title="Chik n Cham by laddi 💎",
     page_icon="💎", 
     layout="wide"
 )
@@ -83,7 +83,7 @@ def check_password():
 # ==========================================
 
 def main():
-    st.title("💎 Chick n Cham by laddi")
+    st.title("💎 Chik n Cham by laddi")
     st.markdown("### Current Operations")
 
     with st.sidebar:
@@ -242,7 +242,7 @@ def main():
                         if isinstance(pdf_bytes, bytes):
                             # Create a dynamic filename
                             safe_name = str(selected_row['Client Formal Name']).replace(" ", "_")
-                            file_name = f"Invoice_ChickNCham_{safe_name}.pdf"
+                            file_name = f"Invoice_chikncham_{safe_name}.pdf"
                             
                             st.download_button(
                                 label="📥 Download PDF Invoice",

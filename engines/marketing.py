@@ -13,7 +13,7 @@ def generate_instagram_captions(product_name, price, features):
         # Using Gemini 3.1 Flash Lite for higher rate limits (500/day) to prevent client errors
         model = genai.GenerativeModel('gemini-3.1-flash-lite')
         prompt = f"""
-        You are an expert social media manager for an artificial jewelry brand named 'Chick n Cham by laddi'.
+        You are an expert social media manager for an artificial jewelry brand named 'chik n cham by laddi'.
         With instagram as the primary platform its username is 'chik_n_cham_by_laddi'.
         Write 3 different Instagram captions for a new product drop.
         

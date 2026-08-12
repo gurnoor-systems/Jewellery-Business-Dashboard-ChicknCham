@@ -19,7 +19,7 @@ def upload_to_cloudinary(image_bytes, sku):
         # We assign the SKU as the public_id so it's easy to track
         response = cloudinary.uploader.upload(
             image_bytes, 
-            public_id=f"chickncham/{sku}",
+            public_id=f"chikncham/{sku}",
             resource_type="image"
         )
         
