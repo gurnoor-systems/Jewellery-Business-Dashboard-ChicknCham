@@ -82,7 +82,7 @@ def generate_invoice_pdf(transaction_row):
                 display_name = display_name[:32] + ".."
             
             # Slightly increased row height (10) for better readability
-            pdf.cell(85, 10, f"  {cat}", border=1) # Added space for padding
+            pdf.cell(85, 10, f"  {display_name}", border=1) # Added space for padding
             pdf.cell(30, 10, str(qty), border=1, align="C")
             pdf.cell(40, 10, f"INR {unit_price:,.2f}  ", border=1, align="R")
             pdf.cell(35, 10, f"INR {line_total:,.2f}  ", border=1, align="R")
