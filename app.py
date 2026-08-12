@@ -368,7 +368,7 @@ def main():
                 g_cols = st.columns(len(recent_items))
                 for idx, (_, item) in enumerate(recent_items.iterrows()):
                     with g_cols[idx]:
-                        st.image(item['image_url'], use_container_width=True)
+                        st.image(item['image_url'], use_coloumn_width=True)
                         st.caption(f"**{item['Item_SKU']}**\nCost: ₹{item['Sourcing_Price']}")
 
         with tab6:
@@ -428,13 +428,13 @@ def main():
                     with col_live:
                         st.markdown("**Scanned Feed**")
                         if live_bytes:
-                            st.image(live_bytes, use_container_width=True)
+                            st.image(live_bytes, use_column_width=True)
                         else:
                             st.caption("Manual Search Mode")
 
                     with col_vault:
                         st.markdown("**Database Record**")
-                        st.image(match['image_url'], use_container_width=True)
+                        st.image(match['image_url'], use_column_width=True)
                         st.caption(f"SKU: `{match['Item_SKU']}`")
 
                     with col_pricing:
