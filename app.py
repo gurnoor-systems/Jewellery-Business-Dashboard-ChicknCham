@@ -507,7 +507,7 @@ def main():
                 # Initialize an empty dataframe in session state for the dynamic table
                 if 'pos_items' not in st.session_state:
                     st.session_state.pos_items = pd.DataFrame([
-                        {"Item_SKU": "", "Category": "Choker Set", "Quantity": 1, "Unit Price (₹)": 0.0}
+                        {"Item_SKU": "", "Category": "Choker Set","Custom Details": "", "Quantity": 1, "Unit Price (₹)": 0.0}
                     ])
                 
                 # Dynamic Data Editor
@@ -517,6 +517,7 @@ def main():
                     column_config={
                         "Item_SKU": st.column_config.TextColumn("𝗜𝘁𝗲𝗺 𝗦𝗞𝗨 (Required for Stock Maintenance)"),
                         "Category": st.column_config.SelectboxColumn("𝗖𝗮𝘁𝗲𝗴𝗼𝗿𝘆", options=categories, required=True),
+                        "Custom Details": st.column_config.TextColumn("𝗖𝘂𝘀𝘁𝗼𝗺 𝗗𝗲𝘁𝗮𝗶𝗹𝘀 (Optional)"),
                         "Quantity": st.column_config.NumberColumn("𝗤𝘂𝗮𝗻𝘁𝗶𝘁𝘆", min_value=1, step=1, required=True),
                         "Unit Price (₹)": st.column_config.NumberColumn("𝗨𝗻𝗶𝘁 𝗣𝗿𝗶𝗰𝗲 (₹)", min_value=0.0, format="₹%.2f", required=True)
                     },
@@ -569,7 +570,7 @@ def main():
 
                                 # 🚀 FIX: Gracefully reset the cart instead of deleting the key
                                 st.session_state.pos_items = pd.DataFrame([
-                                {"Item_SKU": "", "Category": "Choker Set", "Quantity": 1, "Unit Price (₹)": 0.0}
+                                {"Item_SKU": "", "Category": "Choker Set","Custom Details": "", "Quantity": 1, "Unit Price (₹)": 0.0}
                             ])
                                 st.cache_data.clear()
                                 st.rerun()
@@ -579,7 +580,7 @@ def main():
         logging.error(f"Critical System Failure: {e}", exc_info=True)
         # Displays a generic, safe message to the front-end user
         st.error("⚠️ The system is currently busy or experiencing high traffic. Please try again in a few moments.")
-        
+
 if __name__ == "__main__":
     if check_password():
         main()

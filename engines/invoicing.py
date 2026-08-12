@@ -65,9 +65,21 @@ def generate_invoice_pdf(transaction_row):
         pdf.set_font("Helvetica", "", 10)
         for item in line_items:
             cat = str(item.get("Category", "Item"))
+            custom = str(item.get("Custom Details", "")).strip()
             qty = int(item.get("Quantity", 1))
             unit_price = float(item.get("Unit Price (₹)", 0.0))
             line_total = qty * unit_price
+
+            if cat.lower() == "other" and custom:
+                display_name = custom
+            elif custom:
+                display_name = f"{cat} ({custom})"
+            else:
+                display_name = cat
+                
+            # Truncate text if it's too long so it doesn't break the PDF table border
+            if len(display_name) > 35:
+                display_name = display_name[:32] + ".."
             
             # Slightly increased row height (10) for better readability
             pdf.cell(85, 10, f"  {cat}", border=1) # Added space for padding
