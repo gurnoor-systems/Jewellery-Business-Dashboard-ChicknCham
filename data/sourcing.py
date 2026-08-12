@@ -4,6 +4,7 @@ from PIL import Image
 import io
 import time
 import gspread
+from data.ingestion import init_connection
 
 def compress_image(image_bytes, max_size=(800, 800), quality=80):
     img = Image.open(io.BytesIO(image_bytes))
@@ -19,11 +20,9 @@ def save_to_sourcing_vault(sku, price, tags, image_url, std_price, vip_price, cl
     Appends a new cataloged item and custom pricing to the Sourcing_Vault tab.
     """
     try:
-        # 1. Prepare clean GCP credentials
-        creds_dict = dict(st.secrets["gcp_service_account"])
-        creds_dict.pop("spreadsheet_id", None)  
+        # 1. Prepare clean GCP credentials  
         
-        client_gspread = gspread.service_account_from_dict(creds_dict)
+        client_gspread = init_connection()
         
         # 2. Retrieve spreadsheet_id safely from secrets
         sheet_id = st.secrets.get("spreadsheet_id") or st.secrets.get("gcp_service_account", {}).get("spreadsheet_id")

@@ -39,12 +39,11 @@ def load_data():
 
 def load_sourcing_vault():
     """
-    Pulls the current inventory from the Sourcing_Vault tab.
+    Pulls the current inventory from the Sourcing_Vault tab using the cached connection.
     """
     try:
-        creds_dict = dict(st.secrets["gcp_service_account"])
-        creds_dict.pop("spreadsheet_id", None)
-        client = gspread.service_account_from_dict(creds_dict)
+        # FIX: Tap into the globally cached Streamlit connection
+        client = init_connection()
         
         sheet_id = st.secrets.get("spreadsheet_id") or st.secrets.get("gcp_service_account", {}).get("spreadsheet_id")
         
@@ -59,6 +58,7 @@ def load_sourcing_vault():
         sheet = sh.worksheet("Sourcing_Vault")
         data = sheet.get_all_records()
         return pd.DataFrame(data)
+    
     except Exception as e:
         st.error(f"Vault Connection Error: {e}")
         return pd.DataFrame()

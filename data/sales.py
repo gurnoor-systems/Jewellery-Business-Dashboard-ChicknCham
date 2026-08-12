@@ -3,6 +3,7 @@ import gspread
 import pandas as pd
 from datetime import datetime
 import pytz
+from data.ingestion import init_connection
 
 def log_new_sale(formal_name, handle, line_items_df, total_pieces, total_cost, courier, amount_paid, payment_status):
     """
@@ -10,10 +11,8 @@ def log_new_sale(formal_name, handle, line_items_df, total_pieces, total_cost, c
     """
     try:
         # 1. Establish Secure Database Connection
-        creds_dict = dict(st.secrets["gcp_service_account"])
-        creds_dict.pop("spreadsheet_id", None)
         
-        client_gspread = gspread.service_account_from_dict(creds_dict)
+        client_gspread = init_connection()
         sheet_id = st.secrets.get("spreadsheet_id") or st.secrets.get("gcp_service_account", {}).get("spreadsheet_id")
         
         if sheet_id:
