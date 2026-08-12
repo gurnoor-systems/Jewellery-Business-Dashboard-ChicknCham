@@ -395,20 +395,25 @@ def main():
             with st.container(border=True):
                 if not low_net_mode:
                     live_camera = st.camera_input("📸 Scan Jewelry Piece", key="live_match_cam")
-                    if live_camera:
-                        live_bytes = live_camera.getvalue()
+                    uploaded_photo = st.file_uploader("Or upload a saved image", type=["jpg", "png", "jpeg"], key="live_match_upload")
+
+                    active_photo = live_camera or uploaded_photo
+
+                    if active_photo:
+                        live_bytes = active_photo.getvalue()
                 else:
                     st.info("📶 Low-network mode active. Camera disabled to save bandwidth.")
-                    live_camera = None
+                    active_photo = None
+                    live_bytes = None
 
                 manual_search = st.text_input(
-                    "🔍 Manual Search Fallback", 
+                    "🔍 Manual Search Fallback",
                     placeholder="Search by color, type, or style (e.g., 'Mint Green Choker')...",
                     key="manual_match_input"
                 )
 
             # Execution Logic
-            if live_camera and not manual_search:
+            if active_photo and not manual_search:
                 with st.spinner("🧠 AI Analyzing visual attributes..."):
                     ai_tags = analyze_live_item(live_bytes)
                     if "🚨" not in ai_tags:
@@ -484,7 +489,7 @@ def main():
                                 st.caption("Clearance")
                                 st.code(f"₹{clr_quote:,.0f}", language="markdown")
 
-            elif (live_camera or manual_search) and match is None:
+            elif (active_photo or manual_search) and match is None:
                 st.warning("⚠️ No matching item found in the Sourcing Vault. Verify search tags or check inventory log.")
 
         with tab7:
