@@ -2,6 +2,10 @@ import time
 import uuid
 import streamlit as st
 import pandas as pd
+import hashlib
+import logging
+
+logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Data Imports
 
@@ -62,7 +66,9 @@ def check_password():
         
     # 2. Verification Logic
     def verify_password():
-        if st.session_state.get("admin_password_input", "") == st.secrets["admin"]["password"]:
+        input_pass = st.session_state.get("admin_password_input", "")
+        input_hash = hashlib.sha256(input_pass.encode()).hexdigest()
+        if input_hash == st.secrets["admin"]["password_hash"]:
             st.session_state["password_correct"] = True
         else:
             st.session_state["password_correct"] = False
@@ -569,8 +575,11 @@ def main():
                                 st.rerun()
 
     except Exception as e:
-        st.error(f"Database Connection Error: {e}")
-
+        # Logs the detailed error and stack trace to the Streamlit Cloud console
+        logging.error(f"Critical System Failure: {e}", exc_info=True)
+        # Displays a generic, safe message to the front-end user
+        st.error("⚠️ The system is currently busy or experiencing high traffic. Please try again in a few moments.")
+        
 if __name__ == "__main__":
     if check_password():
         main()
