@@ -124,7 +124,7 @@ def generate_financial_charts(df_sales):
     df_filtered['Total Amount Client Paid You'] = pd.to_numeric(df_filtered['Total Amount Client Paid You'], errors='coerce').fillna(0)
     df_filtered['Total Cost of These Items'] = pd.to_numeric(df_filtered['Total Cost of These Items'], errors='coerce').fillna(0)
     df_filtered['Courier Charge You Paid'] = pd.to_numeric(df_filtered['Courier Charge You Paid'], errors='coerce').fillna(0)   #added this line to ensure courier charges are numeric and fill NaN with 0
-    df_filtered['True Profit'] = df_filtered['Total Amount Client Paid You'] - df_filtered['Total Cost of These Items'] - df_filtered['Courier Charge You Paid'].fillna(0) # added this line to calculate True Profit by subtracting courier charges from the profit calculation
+    df_filtered['True Profit'] = df_filtered['Total Amount Client Paid You'] - (df_filtered['Total Cost of These Items'] + df_filtered['Courier Charge You Paid'].fillna(0)) # added this line to calculate True Profit by subtracting courier charges from the profit calculation
 
     df_trend = df_filtered.groupby(df_filtered['Date of Sale'].dt.date).agg(
         Gross_Revenue=('Total Amount Client Paid You', 'sum'),
