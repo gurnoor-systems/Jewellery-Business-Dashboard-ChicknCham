@@ -1,82 +1,98 @@
+import json
 import pandas as pd
 from fpdf import FPDF
-import io
+import streamlit as st
 
-def engine_automated_invoicing(latest_sale):
+def generate_invoice_pdf(transaction_row):
     """
-    Generates a beautifully formatted PDF receipt with brand colors, 
-    dynamic Invoice IDs, and clickable hyperlinks.
+    Parses the JSON line items from a database row and builds a formal PDF receipt.
     """
-    pdf = FPDF(orientation="P", unit="mm", format="A5") 
-    pdf.add_page()
-    
-    # 1. Auto-Generate Invoice ID
-    sale_date = latest_sale['Date of Sale']
-    date_str = sale_date.strftime('%y%m%d') if pd.notnull(sale_date) else pd.Timestamp.today().strftime('%y%m%d')
-    client_name = str(latest_sale['Instagram/Facebook Handle']).strip().upper()
-    client_prefix = client_name[:3] if len(client_name) >= 3 else client_name.ljust(3, 'X')
-    inv_id = f"INV-{date_str}-{client_prefix}"
-    
-    # 2. Brand Header (Deep Maroon)
-    pdf.set_text_color(128, 0, 0) # RGB for Deep Maroon
-    pdf.set_font("helvetica", "B", 18)
-    pdf.cell(0, 10, "CHICK N CHAM", align="C", new_x="LMARGIN", new_y="NEXT")
-    
-    pdf.set_text_color(100, 100, 100) # Soft grey for tagline
-    pdf.set_font("helvetica", "I", 10)
-    pdf.cell(0, 5, "Handpicked Artificial Jewelry", align="C", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(8)
-    
-    # 3. Invoice Details
-    pdf.set_text_color(0, 0, 0) # Reset to black
-    pdf.set_font("helvetica", "B", 9)
-    pdf.cell(40, 6, "Invoice ID:", border=0)
-    pdf.set_font("helvetica", "", 9)
-    pdf.cell(0, 6, inv_id, border=0, new_x="LMARGIN", new_y="NEXT")
-    
-    pdf.set_font("helvetica", "B", 9)
-    pdf.cell(40, 6, "Invoice Date:", border=0)
-    pdf.set_font("helvetica", "", 9)
-    formatted_date = sale_date.strftime('%Y-%m-%d') if pd.notnull(sale_date) else "N/A"
-    pdf.cell(0, 6, formatted_date, border=0, new_x="LMARGIN", new_y="NEXT")
-    
-    pdf.set_font("helvetica", "B", 9)
-    pdf.cell(40, 6, "Billed To:", border=0)
-    pdf.set_font("helvetica", "", 9)
-    pdf.cell(0, 6, str(latest_sale['Instagram/Facebook Handle']), border=0, new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(6)
-    
-    # 4. Modern Table Header (Light Grey Fill)
-    pdf.set_fill_color(240, 240, 240)
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_font("helvetica", "B", 9)
-    pdf.cell(70, 8, "Item Description", border=0, align="L", fill=True)
-    pdf.cell(20, 8, "Qty", border=0, align="C", fill=True)
-    pdf.cell(40, 8, "Amount", border=0, align="R", fill=True, new_x="LMARGIN", new_y="NEXT")
-    
-    # 5. Table Body with Faint Bottom Border
-    pdf.set_font("helvetica", "", 9)
-    qty = str(latest_sale.get('Total Pieces Sold', 1))
-    item_desc = str(latest_sale['Items Sold Summary'])
-    amount_str = f"INR {latest_sale['Total Amount Client Paid You']}"
-    
-    pdf.cell(70, 10, item_desc, border="B", align="L")
-    pdf.cell(20, 10, qty, border="B", align="C")
-    pdf.cell(40, 10, amount_str, border="B", align="R", new_x="LMARGIN", new_y="NEXT")
-    
-    # 6. Footer & Clickable Hyperlink
-    pdf.ln(15) 
-    pdf.set_text_color(50, 50, 50) 
-    pdf.set_font("helvetica", "I", 9) # Changed from 'arial' to native 'helvetica' for cross-platform stability
-    pdf.cell(0, 5, "Thank you for shopping with Chick n Cham!", align="C", new_x="LMARGIN", new_y="NEXT")
-    
-    pdf.set_text_color(0, 102, 204) # Subtle link blue
-    pdf.set_font("helvetica", "U", 9)
-    pdf.cell(0, 5, "Follow us on Instagram @Chick_n_Cham_by_laddi", align="C", link="https://www.instagram.com/chik_n_cham_by_laddi/?hl=en")
-    
-    # Output to byte stream
-    pdf_buffer = io.BytesIO()
-    pdf.output(pdf_buffer)
-    pdf_buffer.seek(0)
-    
-    return pdf_buffer
+    try:
+        # Extract variables
+        client_name = str(transaction_row.get("Client Formal Name", "Valued Client"))
+        date_of_sale = str(transaction_row.get("Date of Sale", "N/A"))
+        timestamp = str(transaction_row.get("Timestamp", "N/A"))
+        total_paid = float(transaction_row.get("Total Amount Client Paid You", 0.0))
+        json_string = str(transaction_row.get("Line_Items_JSON", "[]"))
+        
+        # Parse JSON
+        try:
+            line_items = json.loads(json_string)
+        except Exception:
+            line_items = [{"Category": "Item", "Quantity": 1, "Unit Price (₹)": total_paid}]
+
+        # Initialize PDF
+        pdf = FPDF()
+        pdf.add_page()
+        
+        # Header: Maroon Title
+        pdf.set_text_color(128, 0, 0) 
+        pdf.set_font("Helvetica", "B", 24)
+        pdf.cell(0, 10, "CHICK N CHAM", ln=True, align="C")
+        
+        # Subtitle: Gray Italics
+        pdf.set_text_color(128, 128, 128)
+        pdf.set_font("Helvetica", "I", 12)
+        pdf.cell(0, 8, "Handpicked Artificial Jewelry", ln=True, align="C")
+        
+        # Reset color to black
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(10)
+        
+        # Client & Order Info
+        pdf.set_font("Helvetica", "B", 11)
+        # Generate a cleaner invoice ID
+        clean_id = timestamp.replace('/', '').replace(':', '').replace(' ', '')[-6:]
+        
+        pdf.cell(100, 8, f"Billed To: {client_name}", ln=False)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.cell(0, 8, f"Date: {date_of_sale}", ln=True, align="R")
+        
+        pdf.cell(100, 8, "", ln=False) # Spacer
+        pdf.cell(0, 8, f"Invoice ID: INV-{clean_id}", ln=True, align="R")
+        pdf.ln(10)
+        
+        # Table Header
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.set_fill_color(245, 245, 245)
+        pdf.cell(85, 10, "Item Description", border=1, fill=True)
+        pdf.cell(30, 10, "Qty", border=1, align="C", fill=True)
+        pdf.cell(40, 10, "Unit Price", border=1, align="R", fill=True)
+        pdf.cell(35, 10, "Amount", border=1, align="R", fill=True)
+        pdf.ln()
+        
+        # Table Rows
+        pdf.set_font("Helvetica", "", 10)
+        for item in line_items:
+            cat = str(item.get("Category", "Item"))
+            qty = int(item.get("Quantity", 1))
+            unit_price = float(item.get("Unit Price (₹)", 0.0))
+            line_total = qty * unit_price
+            
+            pdf.cell(85, 10, cat, border=1)
+            pdf.cell(30, 10, str(qty), border=1, align="C")
+            pdf.cell(40, 10, f"INR {unit_price:,.2f}", border=1, align="R")
+            pdf.cell(35, 10, f"INR {line_total:,.2f}", border=1, align="R")
+            pdf.ln()
+            
+        # Grand Total
+        pdf.ln(5)
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(155, 10, "Grand Total Paid:", align="R")
+        pdf.cell(35, 10, f"INR {total_paid:,.2f}", align="R")
+        
+        # Footer
+        pdf.ln(30)
+        pdf.set_font("Helvetica", "I", 10)
+        pdf.set_text_color(0, 0, 0)
+        pdf.cell(0, 6, "Thank you for shopping with Chick n Cham!", ln=True, align="C")
+        
+        # Blue Hyperlink
+        pdf.set_text_color(0, 0, 255)
+        pdf.set_font("Helvetica", "U", 10)
+        pdf.cell(0, 6, "Follow us on Instagram @Chick_n_Cham_by_laddi", align="C", link="https://instagram.com/Chick_n_Cham_by_laddi")
+        
+        return bytes(pdf.output())
+        
+    except Exception as e:
+        return f"Error generating PDF: {str(e)}"
