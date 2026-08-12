@@ -27,7 +27,15 @@ def engine_cost_profitability(df_sales, df_sourcing):
         if 'Total Amount Client Paid You' in df_sales.columns and 'Total Cost of These Items' in df_sales.columns:
             revenue = pd.to_numeric(paid_df['Total Amount Client Paid You'], errors='coerce').fillna(0)
             cost = pd.to_numeric(paid_df['Total Cost of These Items'], errors='coerce').fillna(0)
-            true_profit = (revenue - cost).sum()
+
+            # Safely pull courier charges (default to 0 if the column is somehow missing)
+            if 'Courier Charge You Paid' in paid_df.columns:
+                courier = pd.to_numeric(paid_df['Courier Charge You Paid'], errors='coerce').fillna(0)
+            else:
+                courier = 0
+                
+            # The final correct math for the KPI card
+            true_profit = (revenue - cost - courier).sum()
             
         # 2. Identify Top Performer
         if 'Line_Items_JSON' in df_sales.columns and not paid_df.empty:
