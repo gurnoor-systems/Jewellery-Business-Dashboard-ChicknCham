@@ -299,36 +299,41 @@ def main():
                 if st.button("Generate Caption from Image") and active_vision_img and price_input:
                     with st.spinner("AI is analyzing the jewelry..."):
 
-                        # 🚀 LATENCY OPTIMIZATION: Compress the image in memory before sending to Gemini
+                        try:
+                            # 🚀 LATENCY OPTIMIZATION: Compress the image in memory before sending to Gemini
 
-                        img = Image.open(active_vision_img)
-                        img.thumbnail((800, 800)) # Shrinks 10MB phone photos down to ~200KB instantly
+                            img = Image.open(active_vision_img)
+                            img.thumbnail((800, 800)) # Shrinks 10MB phone photos down to ~200KB instantly
                         
-                        prompt = f"""
-                        You are an expert social media manager for an artificial jewelry brand named 'chik n cham by laddi'.
-                        With instagram as the primary platform its username is 'chik_n_cham_by_laddi'.
-                        Analyze this image and write a highly engaging 3 different Instagram captions for a new product drop.
+                            prompt = f"""
+                            You are an expert social media manager for an artificial jewelry brand named 'chik n cham by laddi'.
+                            With instagram as the primary platform its username is 'chik_n_cham_by_laddi'.
+                            Analyze this image and write a highly engaging 3 different Instagram captions for a new product drop.
         
-                        The price is ₹{price_input}. 
+                            The price is ₹{price_input}. 
                         
-                        Guidelines:
-                        - Make the captions highly engaging and use relevant emojis.
-                        - Include a mix of popular and niche hashtags for artificial jewelry in India.
-                        - Keep the tone elegant but accessible.
-                        - Include a strong Call to Action (CTA) telling customers to DM to order.
+                            Guidelines:
+                            - Make the captions highly engaging and use relevant emojis.
+                            - Include a mix of popular and niche hashtags for artificial jewelry in India.
+                            - Keep the tone elegant but accessible.
+                            - Include a strong Call to Action (CTA) telling customers to DM to order.
         
-                        Format the output clearly with headers: Option 1, Option 2, and Option 3.
-                        Output primarily in simple plain English, but include a few Hindi words or phrases to appeal to the local audience in atleast 1 option.
-                        Also the output is to be highly engaging, considering primary shoppers as women aged 18-55 in India, who are looking for affordable yet stylish artificial jewelry with great lasting quality.
-                        Customers are majorly from, india but also from Us, Canada, UK, Australia, and Germany. So the captions should be globally appealing but with a strong Indian cultural touch.
+                            Format the output clearly with headers: Option 1, Option 2, and Option 3.
+                            Output primarily in simple plain English, but include a few Hindi words or phrases to appeal to the local audience in atleast 1 option.
+                            Also the output is to be highly engaging, considering primary shoppers as women aged 18-55 in India, who are looking for affordable yet stylish artificial jewelry with great lasting quality.
+                            Customers are majorly from, india but also from Us, Canada, UK, Australia, and Germany. So the captions should be globally appealing but with a strong Indian cultural touch.
                         
-                        """
-                        # Call your Gemini Vision model (Ensure you are using gemini-1.5-flash for lowest latency)
-                        model = genai.GenerativeModel('gemini-2.5-flash')
-                        response = model.generate_content([prompt, img])
+                            """
+                            # Call your Gemini Vision model (Ensure you are using gemini-1.5-flash for lowest latency)
+                            model = genai.GenerativeModel('gemini-1.5-flash')
+                            response = model.generate_content([prompt, img])
                         
-                        st.success("Caption Generated!")
-                        st.text_area("Copy your caption:", value=response.text, height=300)
+                            st.success("Caption Generated!")
+                            st.text_area("Copy your caption:", value=response.text, height=300)
+
+                        except Exception as e:
+                            # 🛡️ ERROR HANDLING: Catches API timeouts, safety blocks, or network failures
+                            st.error(f"⚠️ Could not generate caption. Error details: {str(e)}")
             
             else:
                 # 2. The Manual Fallback (Low Network / Text-Only)
@@ -352,28 +357,6 @@ def main():
                         
                         st.success("Caption Generated!")
                         st.text_area("Copy your caption:", value=response.text, height=300)
-            
-            with st.container(border=True):
-                col1, col2 = st.columns([1, 1])
-                
-                with col1:
-                    prod_name = st.text_input("Product Name", placeholder="e.g., Heavy Kundan Bridal Set")
-                    prod_price = st.number_input("Listing Price (₹)", min_value=0.0, step=100.0)
-                    
-                with col2:
-                    prod_features = st.text_area("Key Features (Materials, Colors, Style)", placeholder="e.g., Mint green stones, gold-plated, perfect for weddings, lightweight")
-                    
-                submit_ai = st.button("🚀 Generate Captions", type="primary", use_container_width=True)
-                
-            if submit_ai:
-                if prod_name and prod_features:
-                    with st.spinner("Brainstorming .."):
-                        generated_text = generate_instagram_captions(prod_name, prod_price, prod_features)
-                        st.success("Captions Generated!")
-                        st.help("Copy the text below")
-                        st.markdown(generated_text)
-                else:
-                    st.warning("Please provide a product name and some features so the AI knows what to write about.")
 
         with tab5:
             st.subheader("Point of Source (POS+)")
