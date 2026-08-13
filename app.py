@@ -3,9 +3,13 @@ import uuid
 import streamlit as st
 import pandas as pd
 import hashlib
+import google.generativeai as genai
+from PIL import Image
+import io
 import logging
 
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
+genai.configure(api_key=st.secrets["gemini"]["api_key"])
 
 # Data Imports
 
@@ -120,7 +124,7 @@ def main():
             "🛒 Log a Sale",
             "🧾 Invoice"
         ])
-        
+
         with tab1:
             st.subheader("Current Financial Health")
             if not df_sales.empty and not df_sourcing.empty:
@@ -269,9 +273,85 @@ def main():
             else:
                 st.warning("Database empty or missing structured columns. Log a sale first.")
         
+
         with tab4:
             st.subheader("✨ Caption Generator")
             st.markdown("Instantly generating engaging Instagram copy and hashtags for your latest drops.")
+
+            # 1. The Mode Toggle
+            vision_mode = st.toggle("✨ AI Vision Mode (Auto-detect from Images)", value=False)
+            
+            if vision_mode:
+                st.info("Upload or snap a photo of the jewelry. AI will analyze the piece to write the caption.")
+                
+                # Image Inputs
+                col1, col2 = st.columns(2)
+                with col1:
+                    vision_cam = st.camera_input("📸 Camera", key="caption_cam")
+                with col2:
+                    vision_upload = st.file_uploader("📂 Upload", type=["jpg", "png", "jpeg"], key="caption_upload")
+                
+                active_vision_img = vision_cam or vision_upload
+                
+                # The only text the user has to type
+                price_input = st.text_input("Price (₹) *", placeholder="e.g. 1500")
+                
+                if st.button("Generate Caption from Image") and active_vision_img and price_input:
+                    with st.spinner("AI is analyzing the jewelry..."):
+
+                        # 🚀 LATENCY OPTIMIZATION: Compress the image in memory before sending to Gemini
+
+                        img = Image.open(active_vision_img)
+                        img.thumbnail((800, 800)) # Shrinks 10MB phone photos down to ~200KB instantly
+                        
+                        prompt = f"""
+                        You are an expert social media manager for an artificial jewelry brand named 'chik n cham by laddi'.
+                        With instagram as the primary platform its username is 'chik_n_cham_by_laddi'.
+                        Analyze this image and write a highly engaging 3 different Instagram captions for a new product drop.
+        
+                        The price is ₹{price_input}. 
+                        
+                        Guidelines:
+                        - Make the captions highly engaging and use relevant emojis.
+                        - Include a mix of popular and niche hashtags for artificial jewelry in India.
+                        - Keep the tone elegant but accessible.
+                        - Include a strong Call to Action (CTA) telling customers to DM to order.
+        
+                        Format the output clearly with headers: Option 1, Option 2, and Option 3.
+                        Output primarily in simple plain English, but include a few Hindi words or phrases to appeal to the local audience in atleast 1 option.
+                        Also the output is to be highly engaging, considering primary shoppers as women aged 18-55 in India, who are looking for affordable yet stylish artificial jewelry with great lasting quality.
+                        Customers are majorly from, india but also from Us, Canada, UK, Australia, and Germany. So the captions should be globally appealing but with a strong Indian cultural touch.
+                        
+                        """
+                        # Call your Gemini Vision model (Ensure you are using gemini-1.5-flash for lowest latency)
+                        model = genai.GenerativeModel('gemini-2.5-flash')
+                        response = model.generate_content([prompt, img])
+                        
+                        st.success("Caption Generated!")
+                        st.text_area("Copy your caption:", value=response.text, height=300)
+            
+            else:
+                # 2. The Manual Fallback (Low Network / Text-Only)
+                product_name = st.text_input("Product Name *", placeholder="e.g. Mint Green Kundan Set")
+                features = st.text_area("Key Features", placeholder="e.g. Gold plated, pearl drops, lightweight...")
+                price_input = st.text_input("Price (₹) *", placeholder="e.g. 1500")
+                
+                if st.button("Generate Caption from Text") and product_name and price_input:
+                    with st.spinner("Drafting caption..."):
+                        prompt = f"""
+                        You are an expert social media manager for a premium artificial jewelry brand on Instagram.
+                        Write a highly engaging Instagram caption for the following product:
+                        Name: {product_name}
+                        Features: {features}
+                        Price: ₹{price_input}
+                        Include an engaging hook and relevant hashtags.
+                        """
+                        # Standard text model call
+                        model = genai.GenerativeModel('gemini-3.1-flash-lite')
+                        response = model.generate_content(prompt)
+                        
+                        st.success("Caption Generated!")
+                        st.text_area("Copy your caption:", value=response.text, height=300)
             
             with st.container(border=True):
                 col1, col2 = st.columns([1, 1])
