@@ -502,7 +502,7 @@ def main():
                         with st.container(border=True):
                             # Display item image
                             if 'image_url' in item and str(item['image_url']).strip():
-                                st.image(item['image_url'], use_container_width=True)
+                                st.image(item['image_url'], use_column_width=True)
                             
                             # Item metadata
                             st.markdown(f"**`{item.get('Item_SKU', 'N/A')}`**")
