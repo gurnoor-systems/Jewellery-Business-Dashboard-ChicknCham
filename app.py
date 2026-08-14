@@ -348,14 +348,17 @@ def main():
             
             else:
                 # 2. The Manual Fallback (Low Network / Text-Only)
-                product_name = st.text_input("Product Name *", placeholder="e.g. Mint Green Kundan Set")
-                features = st.text_area("Key Features", placeholder="e.g. Gold plated, pearl drops, lightweight...")
-                price_input = st.text_input("Price (₹) *", placeholder="e.g. 1500")
+                with st.form("text_caption_form", clear_on_submit=False):
+                    product_name = st.text_input("Product Name *", placeholder="e.g. Mint Green Kundan Set")
+                    features = st.text_area("Key Features", placeholder="e.g. Gold plated, pearl drops, lightweight...")
+                    price_input = st.text_input("Price (₹) *", value=auto_price, placeholder="e.g. 1500")
+                    
+                    submit_text_caption = st.form_submit_button("Generate Caption from Text")
                 
-                if st.button("Generate Caption from Text") and product_name and price_input:
+                # We now tie the execution strictly to the form submit button
+                if submit_text_caption and product_name and price_input:
                     with st.spinner("Drafting caption..."):
                         
-                        # Clean Engine Call
                         captions, error_msg = generate_instagram_captions(
                             price=price_input, 
                             product_name=product_name, 
@@ -452,7 +455,7 @@ def main():
 
                         generated_sku = f"JK-{int(time.time())}-{uuid.uuid4().hex[:4].upper()}"
                 
-                        save_btn = st.button("💾 Save to Vault", type="primary", use_container_width=True, key="save_vault_btn")
+                        save_btn = st.button("💾 Save to Vault", type="primary", use_container_width=True, key=f"save_vault_btn_{svfk}")
 
             if save_btn and active_photo:
                 with st.spinner("Compressing image & updating Vault..."):
@@ -540,11 +543,14 @@ def main():
                     active_photo = None
                     live_bytes = None
 
-                manual_search = st.text_input(
-                    "🔍 Manual Search Fallback",
-                    placeholder="Search by color, type, or style (e.g., 'Mint Green Choker')...",
-                    key="manual_match_input"
-                )
+
+                # 🚀 MOBILE UPGRADE: Form blocks partial-word search freezing
+                with st.form("manual_search_form"):
+                    manual_search = st.text_input(
+                        "🔍 Manual Search Fallback",
+                        placeholder="Search by color, type, or style (e.g., 'Mint Green Choker')...",
+                    )
+                    search_btn = st.form_submit_button("Search Vault", use_container_width=True)
 
             # Execution Logic
             if active_photo and not manual_search:
@@ -556,7 +562,8 @@ def main():
                     else:
                         st.error(ai_tags)
 
-            elif manual_search:
+            # Execution is now tied to the search button being clicked
+            elif search_btn and manual_search:
                 match = find_vault_match(manual_search, vault_df)
 
             # Output Presentation Card

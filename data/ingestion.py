@@ -37,6 +37,7 @@ def load_data():
         
     return df_sales, df_sourcing
 
+@st.cache_data(ttl=600)
 def load_sourcing_vault():
     """
     Pulls the current inventory from the Sourcing_Vault tab using the cached connection.
