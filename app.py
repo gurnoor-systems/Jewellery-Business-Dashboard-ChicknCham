@@ -362,46 +362,66 @@ def main():
 
         with tab5:
             st.subheader("Point of Source (POS+)")
-            st.caption("Catalog inventory with images, pricing, and tags for instant retrieval during live sessions.")
+            st.caption("Catalog inventory with images, pricing, and tags for retrieval during live sessions.")
+
+            # --- OPTIMIZATION 2: The Continuous Loop Setup ---
+            # Initialize a dynamic key counter. When this counter changes, Streamlit instantly deletes the old form.
+            
+            if 'vault_form_key' not in st.session_state:
+                st.session_state.vault_form_key = 0
+            
+            # Short variable name for clean code
+            svfk = st.session_state.vault_form_key
 
             # Main Ingestion Container
+            
             with st.container(border=True):
                 col_capture, col_form = st.columns([1, 1], gap="medium")
 
-                # Distinct Bordered Container 1
+                # Bordered Container 1
                 with col_capture:
                     with st.container(border=True):
                         st.markdown("##### 📸 Capture Item to be logged")
                         camera_photo = st.camera_input("Take Photo", key="vault_cam")
-                        uploaded_photo = st.file_uploader("Or upload high-res image", type=["jpg", "png", "jpeg"], key="vault_upload")
+                        uploaded_photo = st.file_uploader("Or upload high-resolution image", type=["jpg", "png", "jpeg"], key="vault_upload")
                         active_photo = camera_photo or uploaded_photo
 
-                # Distinct Bordered Container 2
+                # Bordered Container 2
                 with col_form:
                     with st.container(border=True):
                         st.markdown("##### 📝 Item Details")
                 
-                        category = st.selectbox("Category", ["Choker Set", "Earrings", "Bangles", "Polki", "Kundan", "Other"], key="vault_cat")
+                        category = st.selectbox("Category", ["Choker Set", "Earrings", "Bangles", "Polki", "Kundan", "Other"], key=f"vault_cat_{svfk}")
 
                         # Stock Quantity Input
                         c1, c2 = st.columns(2)
                         with c1:
-                            sourcing_price = st.number_input("Sourcing Price (₹)", min_value=0.0, step=50.0, value=500.0, key="vault_price")
+                            sourcing_price = st.number_input("Sourcing Price (₹)", min_value=0.0, step=50.0, value=500.0, key=f"vault_price_{svfk}")
                         with c2:
-                            stock_qty = st.number_input("Stock Quantity", min_value=1, step=1, value=1, key="vault_qty")
-                            
-                        raw_tags = st.text_input("Additional Tags (to be used in case of low network connectivity)", placeholder="e.g., Mint Green, Pearl Drops", key="vault_tags")
+                            stock_qty = st.number_input("Stock Quantity", min_value=1, step=1, value=1, key=f"vault_qty_{svfk}")
+
+                        raw_tags = st.text_input("Additional Tags (to be used in case of low network connectivity)", placeholder="e.g., Mint Green, Pearl Drops", key=f"vault_tags_{svfk}")
 
                         combined_tags = f"{category}, {raw_tags}" if raw_tags else category
                 
                         st.divider()
+
+                        # --- OPTIMIZATION 1: Screen Real Estate ---
+                        # Hide the manual overrides by default to save mobile scrolling
+
+                        with st.expander("⚙️ Edit Target Prices (Auto-Calculated)", expanded=False):
+                            st.caption("Edit these targets to save custom prices to the vault.")
+                            p_col1, p_col2, p_col3 = st.columns(3)
+                            custom_std = p_col1.number_input("Standard", value=float(sourcing_price * 1.8), step=10.0, key=f"std_price_{svfk}")
+                            custom_vip = p_col2.number_input("VIP", value=float(sourcing_price * 1.5), step=10.0, key=f"vip_price_{svfk}")
+                            custom_clr = p_col3.number_input("Clearance", value=float(sourcing_price * 1.2), step=10.0, key=f"clr_price_{svfk}")
                         st.markdown("##### 💡 Selling Prices")
                         st.caption("Edit these calculated targets to save custom prices to the vault.")
                 
                         p_col1, p_col2, p_col3 = st.columns(3)
-                        custom_std = p_col1.number_input("Standard", value=float(sourcing_price * 1.8), step=10.0)
-                        custom_vip = p_col2.number_input("VIP", value=float(sourcing_price * 1.5), step=10.0)
-                        custom_clr = p_col3.number_input("Clearance", value=float(sourcing_price * 1.2), step=10.0)
+                        custom_std = p_col1.number_input("Standard", value=float(sourcing_price * 1.8), step=10.0, key=f"std_price_{svfk}")
+                        custom_vip = p_col2.number_input("VIP", value=float(sourcing_price * 1.5), step=10.0, key=f"vip_price_{svfk}")
+                        custom_clr = p_col3.number_input("Clearance", value=float(sourcing_price * 1.2), step=10.0, key=f"clr_price_{svfk}")
 
                         generated_sku = f"JK-{int(time.time())}-{uuid.uuid4().hex[:4].upper()}"
                 
@@ -427,9 +447,14 @@ def main():
                         )
                 
                         if is_saved:
-                            st.toast(f"✅ Saved {generated_sku} to Vault!", icon="🎉")
+                            st.session_state.vault_form_key += 1
+                            st.toast(f"✅ Saved {generated_sku}! Ready for next item.", icon="🎉")
+                            st.cache_data.clear() # Force the mini-gallery to show the new item
+                            st.rerun() # Instantly reload the UI with the fresh form
+
                         else:
                             st.error("⚠️ Failed to update Google Sheet ledger.")
+
                     else:
                         st.error(cdn_url)
 
