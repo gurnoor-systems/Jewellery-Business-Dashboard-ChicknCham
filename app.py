@@ -484,19 +484,36 @@ def main():
 
                     else:
                         st.error(cdn_url)
-
-            # 3. Recently Cataloged Mini-Gallery
             
+            # 3. Recently Cataloged Mini-Gallery
+
             st.divider()
             st.markdown("##### 🕒 Recently Cataloged Inventory")
+            
             vault_df = load_sourcing_vault()
             if not vault_df.empty:
-                recent_items = vault_df.tail(4).iloc[::-1] # Get last 4 items
-                g_cols = st.columns(len(recent_items))
+                recent_items = vault_df.tail(6).iloc[::-1]  # Display last 6 items
+                
+                # Render in a clean 2-column mobile-friendly grid
+                grid_cols = st.columns(2)
+                
                 for idx, (_, item) in enumerate(recent_items.iterrows()):
-                    with g_cols[idx]:
-                        st.image(item['image_url'], use_column_width=True)
-                        st.caption(f"**{item['Item_SKU']}**\nCost: ₹{item['Sourcing_Price']}")
+                    with grid_cols[idx % 2]:
+                        with st.container(border=True):
+                            # Display item image
+                            if 'image_url' in item and str(item['image_url']).strip():
+                                st.image(item['image_url'], use_container_width=True)
+                            
+                            # Item metadata
+                            st.markdown(f"**`{item.get('Item_SKU', 'N/A')}`**")
+                            
+                            # Price & category tags
+                            cost = item.get('Sourcing_Price', 0)
+                            st.caption(f"Cost: **₹{float(cost):,.0f}**")
+                            
+                            tags = item.get('tags', '')
+                            if tags:
+                                st.caption(f"🏷️ {tags}")
 
         with tab6:
             st.subheader("🔴 Live Broadcast Assistant")
@@ -613,6 +630,10 @@ def main():
             st.subheader("🛒 Point of Sale (POS)")
             st.caption("Log transactions securely. Line items will automatically sync to analytics and invoicing.")
             
+            # Initialize Cart in Session State
+            if 'pos_cart' not in st.session_state:
+                st.session_state.pos_cart = []
+            
             with st.container(border=True):
                 st.markdown("##### 👤 Client Information")
                 c1, c2 = st.columns(2)
@@ -620,82 +641,99 @@ def main():
                 with c1:
                     formal_name = st.text_input("Formal Name (For Invoice)", placeholder="e.g., Priya Sharma", key="pos_name")
                 with c2:
-                        social_handle = st.text_input("Instagram / Social Handle", placeholder="e.g., @priya_styles", key="pos_handle")
+                    social_handle = st.text_input("Instagram / Social Handle", placeholder="e.g., @priya_styles", key="pos_handle")
             
-                st.divider()
-                st.markdown("##### 📦 Sold Items")
-                st.info("Will be used for Billing")
-                
-                # Initialize an empty dataframe in session state for the dynamic table
-                if 'pos_items' not in st.session_state:
-                    st.session_state.pos_items = pd.DataFrame([
-                        {"Item_SKU": "", "Category": "Choker Set","Custom Details": "", "Quantity": 1, "Unit Price (₹)": 0.0}
-                    ])
-                
-                # Dynamic Data Editor
-                categories = ["Choker Set", "Earrings", "Bangles", "Polki", "Kundan", "Ring", "Other"]
-                edited_df = st.data_editor(
-                    st.session_state.pos_items,
-                    column_config={
-                        "Item_SKU": st.column_config.TextColumn("𝗜𝘁𝗲𝗺 𝗦𝗞𝗨 (Required for Stock Maintenance)"),
-                        "Category": st.column_config.SelectboxColumn("𝗖𝗮𝘁𝗲𝗴𝗼𝗿𝘆", options=categories, required=True),
-                        "Custom Details": st.column_config.TextColumn("𝗖𝘂𝘀𝘁𝗼𝗺 𝗗𝗲𝘁𝗮𝗶𝗹𝘀 (Optional)"),
-                        "Quantity": st.column_config.NumberColumn("𝗤𝘂𝗮𝗻𝘁𝗶𝘁𝘆", min_value=1, step=1, required=True),
-                        "Unit Price (₹)": st.column_config.NumberColumn("𝗨𝗻𝗶𝘁 𝗣𝗿𝗶𝗰𝗲 (₹)", min_value=0.0, format="₹%.2f", required=True)
-                    },
-                num_rows="dynamic",
-                use_container_width=True,
-                key="pos_data_editor"
-                )
+            st.divider()
             
-                # Auto-calculate totals based on the table
-                calc_pieces = int(edited_df["Quantity"].sum())
-                calc_revenue = float((edited_df["Quantity"] * edited_df["Unit Price (₹)"]).sum())
+            # MOBILE UPGRADE: Form blocks the 5-7 second gray screen refresh!
+            with st.form("add_item_form", clear_on_submit=True):
+                st.markdown("##### ➕ Add Item to Order")
                 
-                st.divider()
-                st.markdown("##### 💰 Financials")
-                f1, f2, f3 = st.columns(3)
+                item_sku = st.text_input("Item SKU", placeholder="e.g. JK-12345")
+                category = st.selectbox("Category", ["Choker Set", "Earrings", "Bangles", "Polki", "Kundan", "Ring", "Other"])
+                custom_details = st.text_input("Custom Details (Optional)")
                 
-                with f1:
-                    cost_price = st.number_input("Total Sourcing Cost (₹)", min_value=0.0, step=50.0, key="pos_cost")
-                with f2:
-                        courier_charge = st.number_input("Courier Charge Paid (₹)", min_value=0.0, step=10.0, key="pos_courier")
-                with f3:
-                    final_received = st.number_input("Final Amount Received (₹)", value=calc_revenue, min_value=0.0, step=50.0, key="pos_final")
+                qty_col, price_col = st.columns(2)
+                with qty_col:
+                    qty = st.number_input("Quantity", min_value=1, step=1)
+                with price_col:
+                    unit_price = st.number_input("Unit Price (₹)", min_value=0.0, step=50.0)
+                    
+                add_to_cart = st.form_submit_button("🛒 Add to Cart", use_container_width=True)
                 
-                payment_status = st.selectbox("Payment Status", ["Paid Online", "Cash on Delivery", "Pending"], key="pos_status")
-            
-                save_sale_btn = st.button("💾 Finalize Transaction", type="primary", use_container_width=True, key="save_pos_btn")
+                if add_to_cart:
+                    st.session_state.pos_cart.append({
+                        "Item_SKU": item_sku,
+                        "Category": category,
+                        "Custom Details": custom_details,
+                        "Quantity": qty,
+                        "Unit Price (₹)": unit_price
+                    })
+                    st.success("Item added to cart!")
 
-                # Execution Logic
-                if save_sale_btn:
-                    if not formal_name or not social_handle:
-                        st.error("⚠️ Please provide both the Formal Name and Social Handle.")
-                    elif calc_pieces == 0:
-                        st.error("⚠️ Please add at least one item to the cart.")
-                    else:
-                        with st.spinner("Logging transaction to database..."):
+            #  MOBILE UPGRADE: Vertical Cart Display (No Horizontal Scrolling)
+            calc_pieces = 0
+            calc_revenue = 0.0
+            
+            if st.session_state.pos_cart:
+                st.markdown("##### 🛍️ Current Cart")
+                for idx, item in enumerate(st.session_state.pos_cart):
+                    with st.container(border=True):
+                        st.markdown(f"**{item['Category']}** | `{item['Item_SKU']}`")
+                        if item['Custom Details']:
+                            st.caption(f"Details: {item['Custom Details']}")
+                        st.markdown(f"Qty: **{item['Quantity']}** | Price: **₹{item['Unit Price (₹)']:,.2f}**")
+                    
+                    calc_pieces += item['Quantity']
+                    calc_revenue += (item['Quantity'] * item['Unit Price (₹)'])
+                    
+                if st.button("🗑️ Clear Cart", key="clear_cart_btn"):
+                    st.session_state.pos_cart = []
+                    st.rerun()
 
-                            success = log_new_sale(
-                                formal_name=formal_name,
-                                handle=social_handle,
-                                line_items_df=edited_df,
-                                total_pieces=calc_pieces,
-                                total_cost=cost_price,
-                                courier=courier_charge,
-                                amount_paid=final_received,
-                                payment_status=payment_status
-                            )
+            st.divider()
+            st.markdown("##### 💰 Financials & Checkout")
+            f1, f2, f3 = st.columns(3)
+            
+            with f1:
+                cost_price = st.number_input("Total Sourcing Cost (₹)", min_value=0.0, step=50.0, key="pos_cost")
+            with f2:
+                courier_charge = st.number_input("Courier Charge Paid (₹)", min_value=0.0, step=10.0, key="pos_courier")
+            with f3:
+                final_received = st.number_input("Final Amount Received (₹)", value=float(calc_revenue), min_value=0.0, step=50.0, key="pos_final")
+            
+            payment_status = st.selectbox("Payment Status", ["Paid Online", "Cash on Delivery", "Pending"], key="pos_status")
+        
+            save_sale_btn = st.button("💾 Finalize Transaction", type="primary", use_container_width=True, key="save_pos_btn")
+
+            # Execution Logic
+            if save_sale_btn:
+                if not formal_name or not social_handle:
+                    st.error("⚠️ Please provide both the Formal Name and Social Handle.")
+                elif len(st.session_state.pos_cart) == 0:
+                    st.error("⚠️ Please add at least one item to the cart.")
+                else:
+                    with st.spinner("Logging transaction to database..."):
+                        # Convert the session state list of dictionaries back to a DataFrame for the backend
+                        pos_df = pd.DataFrame(st.session_state.pos_cart)
                         
-                            if success:
-                                st.success(f"✅ Transaction logged for {formal_name}! Total Pieces: {calc_pieces}")
-
-                                # reset the cart instead of deleting the key
-                                st.session_state.pos_items = pd.DataFrame([
-                                {"Item_SKU": "", "Category": "Choker Set","Custom Details": "", "Quantity": 1, "Unit Price (₹)": 0.0}
-                            ])
-                                st.cache_data.clear()
-                                st.rerun()
+                        success = log_new_sale(
+                            formal_name=formal_name,
+                            handle=social_handle,
+                            line_items_df=pos_df,
+                            total_pieces=calc_pieces,
+                            total_cost=cost_price,
+                            courier=courier_charge,
+                            amount_paid=final_received,
+                            payment_status=payment_status
+                        )
+                    
+                        if success:
+                            st.success(f"✅ Transaction logged for {formal_name}! Total Pieces: {calc_pieces}")
+                            # Clear the cart memory instantly
+                            st.session_state.pos_cart = []
+                            st.cache_data.clear()
+                            st.rerun()
 
     except Exception as e:
         # Logs the detailed error and stack trace to the Streamlit Cloud console
