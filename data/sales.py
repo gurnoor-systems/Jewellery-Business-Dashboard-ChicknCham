@@ -109,8 +109,6 @@ def load_sales_data():
         records = sheet.get_all_records()
 
         df = pd.DataFrame(records)
-
-        # 🚀 THE FIX: Strip all invisible spaces from the Google Sheet column headers
         df.columns = df.columns.str.strip()
         
         return df
