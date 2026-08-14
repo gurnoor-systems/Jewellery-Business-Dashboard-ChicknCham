@@ -66,3 +66,49 @@ def generate_instagram_captions(price, image=None, product_name=None, features=N
         logging.error(f"Marketing API Failure: {e}", exc_info=True)
         # Return the error to be displayed by the UI
         return None, str(e)
+
+# ------------------------------------------------------------------
+
+def auto_tag_jewelry(image):
+    """
+    High-speed Vision call to classify jewelry category and generate tags.
+    Returns: (category_string, tags_string)
+    """
+    try:
+        # A highly restrictive prompt forces the AI to be fast and deterministic
+        prompt = """
+        Analyze this jewelry piece. You must respond in exactly this format with no other text:
+        Category: [Category] | Tags: [Tags]
+        
+        Allowed Categories: Choker Set, Earrings, Bangles, Polki, Kundan, Ring, Other.
+        Tags: 3-4 comma-separated visual features (e.g., gold plated, mint green, pearl drops).
+        """
+        
+        # Using the absolute fastest multimodal model available
+        model = genai.GenerativeModel('gemini-3.1-flash-lite')
+        response = model.generate_content([prompt, image])
+        
+        text = response.text.strip()
+        
+        # Default fallbacks
+        final_category = "Other"
+        final_tags = ""
+        
+        # Parse the strict format
+        if "|" in text:
+            parts = text.split("|")
+            cat_part = parts[0].replace("Category:", "").strip()
+            tags_part = parts[1].replace("Tags:", "").strip()
+            
+            allowed_cats = ["Choker Set", "Earrings", "Bangles", "Polki", "Kundan", "Ring", "Other"]
+            for acc in allowed_cats:
+                if acc.lower() in cat_part.lower():
+                    final_category = acc
+                    break
+            final_tags = tags_part
+            
+        return final_category, final_tags
+        
+    except Exception as e:
+        logging.error(f"Auto-Tagging Failure: {e}", exc_info=True)
+        return "Other", ""

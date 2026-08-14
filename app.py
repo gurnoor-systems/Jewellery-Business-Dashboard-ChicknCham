@@ -23,7 +23,7 @@ from data.sales import log_new_sale, load_sales_data
 from engines.financials import engine_cost_profitability, generate_financial_charts, engine_cac_mom_growth
 from engines.crm import engine_vip_loyalty
 from engines.invoicing import generate_invoice_pdf
-from engines.marketing import generate_instagram_captions
+from engines.marketing import generate_instagram_captions, auto_tag_jewelry
 from engines.live_match import analyze_live_item, find_vault_match
 
 # SKU Unique Identifier Generator
@@ -370,8 +370,14 @@ def main():
             if 'vault_form_key' not in st.session_state:
                 st.session_state.vault_form_key = 0
             
-            # Short variable name for clean code
             svfk = st.session_state.vault_form_key
+            
+            # --- OPTIMIZATION 3: AI State Management ---
+            # Pre-initialize the form fields in memory so the AI can safely overwrite them
+            if f"vault_cat_{svfk}" not in st.session_state:
+                st.session_state[f"vault_cat_{svfk}"] = "Choker Set"
+            if f"vault_tags_{svfk}" not in st.session_state:
+                st.session_state[f"vault_tags_{svfk}"] = ""
 
             # Main Ingestion Container
             
@@ -382,9 +388,29 @@ def main():
                 with col_capture:
                     with st.container(border=True):
                         st.markdown("##### 📸 Capture Item to be logged")
-                        camera_photo = st.camera_input("Take Photo", key="vault_cam")
-                        uploaded_photo = st.file_uploader("Or upload high-resolution image", type=["jpg", "png", "jpeg"], key="vault_upload")
+                        camera_photo = st.camera_input("Take Photo", key=f"vault_cam_{svfk}")
+                        uploaded_photo = st.file_uploader("Or upload high-resolution image", type=["jpg", "png", "jpeg"], key=f"vault_upload_{svfk}")
                         active_photo = camera_photo or uploaded_photo
+
+                # --- 🧠 THE AI OBSERVER ---
+                if active_photo:
+                    current_img_id = getattr(active_photo, 'file_id', 'live_camera_feed')
+                    # Check if we have already analyzed this specific image
+                    if st.session_state.get(f"analyzed_img_{svfk}") != current_img_id:
+                        with st.spinner("⚡ AI Auto-Tagging..."):
+                            img = Image.open(active_photo)
+                            img.thumbnail((500, 500)) # Heavy compression for lightning-fast analysis
+                            
+                            # Call the engine
+                            ai_cat, ai_tags = auto_tag_jewelry(img)
+                            
+                            # Force the AI's answers directly into the Streamlit UI widgets
+                            st.session_state[f"vault_cat_{svfk}"] = ai_cat
+                            st.session_state[f"vault_tags_{svfk}"] = ai_tags
+                            st.session_state[f"analyzed_img_{svfk}"] = current_img_id
+                            
+                            # Rerun the page instantly to display the filled forms
+                            st.rerun()
 
                 # Bordered Container 2
                 with col_form:
@@ -415,13 +441,6 @@ def main():
                             custom_std = p_col1.number_input("Standard", value=float(sourcing_price * 1.8), step=10.0, key=f"std_price_{svfk}")
                             custom_vip = p_col2.number_input("VIP", value=float(sourcing_price * 1.5), step=10.0, key=f"vip_price_{svfk}")
                             custom_clr = p_col3.number_input("Clearance", value=float(sourcing_price * 1.2), step=10.0, key=f"clr_price_{svfk}")
-                        st.markdown("##### 💡 Selling Prices")
-                        st.caption("Edit these calculated targets to save custom prices to the vault.")
-                
-                        p_col1, p_col2, p_col3 = st.columns(3)
-                        custom_std = p_col1.number_input("Standard", value=float(sourcing_price * 1.8), step=10.0, key=f"std_price_{svfk}")
-                        custom_vip = p_col2.number_input("VIP", value=float(sourcing_price * 1.5), step=10.0, key=f"vip_price_{svfk}")
-                        custom_clr = p_col3.number_input("Clearance", value=float(sourcing_price * 1.2), step=10.0, key=f"clr_price_{svfk}")
 
                         generated_sku = f"JK-{int(time.time())}-{uuid.uuid4().hex[:4].upper()}"
                 
