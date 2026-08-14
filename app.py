@@ -275,6 +275,7 @@ def main():
         
 
         with tab4:
+            
             st.subheader("✨ Caption Generator")
             st.markdown("Instantly generating engaging Instagram copy and hashtags for your latest drops.")
 
@@ -284,7 +285,6 @@ def main():
             if vision_mode:
                 st.info("Upload or snap a photo of the jewelry. AI will analyze the piece to write the caption.")
                 
-                # Image Inputs
                 col1, col2 = st.columns(2)
                 with col1:
                     vision_cam = st.camera_input("📸 Camera", key="caption_cam")
@@ -292,48 +292,22 @@ def main():
                     vision_upload = st.file_uploader("📂 Upload", type=["jpg", "png", "jpeg"], key="caption_upload")
                 
                 active_vision_img = vision_cam or vision_upload
-                
-                # The only text the user has to type
                 price_input = st.text_input("Price (₹) *", placeholder="e.g. 1500")
                 
                 if st.button("Generate Caption from Image") and active_vision_img and price_input:
                     with st.spinner("AI is analyzing the jewelry..."):
-
-                        try:
-                            # 🚀 LATENCY OPTIMIZATION: Compress the image in memory before sending to Gemini
-
-                            img = Image.open(active_vision_img)
-                            img.thumbnail((800, 800)) # Shrinks 10MB phone photos down to ~200KB instantly
+                        # Compress image in memory
+                        img = Image.open(active_vision_img)
+                        img.thumbnail((800, 800)) 
                         
-                            prompt = f"""
-                            You are an expert social media manager for an artificial jewelry brand named 'chik n cham by laddi'.
-                            With instagram as the primary platform its username is 'chik_n_cham_by_laddi'.
-                            Analyze this image and write a highly engaging 3 different Instagram captions for a new product drop.
-        
-                            The price is ₹{price_input}. 
+                        # 🚀 Clean Engine Call
+                        captions, error_msg = generate_instagram_captions(price=price_input, image=img)
                         
-                            Guidelines:
-                            - Make the captions highly engaging and use relevant emojis.
-                            - Include a mix of popular and niche hashtags for artificial jewelry in India.
-                            - Keep the tone elegant but accessible.
-                            - Include a strong Call to Action (CTA) telling customers to DM to order.
-        
-                            Format the output clearly with headers: Option 1, Option 2, and Option 3.
-                            Output primarily in simple plain English, but include a few Hindi words or phrases to appeal to the local audience in atleast 1 option.
-                            Also the output is to be highly engaging, considering primary shoppers as women aged 18-55 in India, who are looking for affordable yet stylish artificial jewelry with great lasting quality.
-                            Customers are majorly from, india but also from Us, Canada, UK, Australia, and Germany. So the captions should be globally appealing but with a strong Indian cultural touch.
-                        
-                            """
-                            # Call your Gemini Vision model (Ensure you are using gemini-1.5-flash for lowest latency)
-                            model = genai.GenerativeModel('gemini-1.5-flash')
-                            response = model.generate_content([prompt, img])
-                        
+                        if captions:
                             st.success("Caption Generated!")
-                            st.text_area("Copy your caption:", value=response.text, height=300)
-
-                        except Exception as e:
-                            # 🛡️ ERROR HANDLING: Catches API timeouts, safety blocks, or network failures
-                            st.error(f"⚠️ Could not generate caption. Error details: {str(e)}")
+                            st.text_area("Copy your caption:", value=captions, height=300)
+                        else:
+                            st.error(f"⚠️ Could not generate caption. Error details: {error_msg}")
             
             else:
                 # 2. The Manual Fallback (Low Network / Text-Only)
@@ -343,20 +317,19 @@ def main():
                 
                 if st.button("Generate Caption from Text") and product_name and price_input:
                     with st.spinner("Drafting caption..."):
-                        prompt = f"""
-                        You are an expert social media manager for a premium artificial jewelry brand on Instagram.
-                        Write a highly engaging Instagram caption for the following product:
-                        Name: {product_name}
-                        Features: {features}
-                        Price: ₹{price_input}
-                        Include an engaging hook and relevant hashtags.
-                        """
-                        # Standard text model call
-                        model = genai.GenerativeModel('gemini-3.1-flash-lite')
-                        response = model.generate_content(prompt)
                         
-                        st.success("Caption Generated!")
-                        st.text_area("Copy your caption:", value=response.text, height=300)
+                        # 🚀 Clean Engine Call
+                        captions, error_msg = generate_instagram_captions(
+                            price=price_input, 
+                            product_name=product_name, 
+                            features=features
+                        )
+                        
+                        if captions:
+                            st.success("Caption Generated!")
+                            st.text_area("Copy your caption:", value=captions, height=300)
+                        else:
+                            st.error(f"⚠️ Could not generate caption. Error details: {error_msg}")
 
         with tab5:
             st.subheader("Point of Source (POS+)")
@@ -412,7 +385,7 @@ def main():
                     cdn_url = upload_to_cloudinary(compressed_bytes, generated_sku)
 
                     if "🚨" not in cdn_url:
-                        # FIX: Now passing all 7 variables to the backend
+                        # all 7 variables to the backend
                         is_saved = save_to_sourcing_vault(
                             generated_sku, 
                             sourcing_price, 
@@ -621,7 +594,7 @@ def main():
                         st.error("⚠️ Please add at least one item to the cart.")
                     else:
                         with st.spinner("Logging transaction to database..."):
-                            # Call the backend function to serialize JSON and write to Google Sheets
+
                             success = log_new_sale(
                                 formal_name=formal_name,
                                 handle=social_handle,
@@ -636,7 +609,7 @@ def main():
                             if success:
                                 st.success(f"✅ Transaction logged for {formal_name}! Total Pieces: {calc_pieces}")
 
-                                # 🚀 FIX: Gracefully reset the cart instead of deleting the key
+                                # reset the cart instead of deleting the key
                                 st.session_state.pos_items = pd.DataFrame([
                                 {"Item_SKU": "", "Category": "Choker Set","Custom Details": "", "Quantity": 1, "Unit Price (₹)": 0.0}
                             ])
