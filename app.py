@@ -198,18 +198,26 @@ def main():
                 
                 with col1:
                     st.markdown("#### 🏆 Top High-Value Clients")
-                    st.dataframe(
-                        vip_data.head(10),
-                        use_container_width=True,
-                        hide_index=True,
-                        column_config={
-                            "Instagram/Facebook Handle": "Client Handle",
-                            "Total_Orders": "Orders",
-                            "Lifetime_Spend": st.column_config.NumberColumn("Lifetime Spend (₹)", format="₹%d"),
-                            "Total_Profit": st.column_config.NumberColumn("Total Profit (₹)", format="₹%d"),
-                            "Client Status": "Status"
-                        }
-                    )
+                    
+                    for index, row in vip_data.head(5).iterrows():
+                        # Wrap each client in their own distinct visual box
+                        with st.container(border=True):
+                            # Use columns to align the data perfectly on a phone screen
+                            card_col1, card_col2 = st.columns([2, 1])
+                            
+                            with card_col1:
+                                # Client Handle and Status Badge
+                                st.markdown(f"**👤 {row['Instagram/Facebook Handle']}**")
+                                if row['Client Status'] == 'VIP':
+                                    st.caption("🌟 VIP Status")
+                                else:
+                                    st.caption("✅ Active Client")
+                                    
+                            with card_col2:
+                                # Financial Metrics aligned to the right
+                                st.markdown(f"**₹{row['Lifetime_Spend']:,.0f}**")
+                                st.caption(f"🛍️ {row['Total_Orders']} Orders")
+                    
                 with col2:
                     st.markdown("#### 💡 Actionable Insights")
                     repeat_count = len(vip_data[vip_data['Total_Orders'] > 1])
