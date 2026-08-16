@@ -500,7 +500,12 @@ def main():
             # 3. Recently Cataloged Mini-Gallery
             st.divider()
             st.markdown("##### 🕒 Recently Cataloged Inventory")
-            
+
+            filter_cat = st.selectbox(
+                "Filter by Category", 
+                ["All", "Choker Set", "Earrings", "Bangles", "Polki", "Kundan", "Ring", "Other"],
+                key="gallery_filter"
+            )
             vault_df = load_sourcing_vault()
             if not vault_df.empty:
                 recent_items = vault_df.tail(6).iloc[::-1]  
@@ -512,6 +517,11 @@ def main():
                             if 'image_url' in item and str(item['image_url']).strip():
                                 st.image(item['image_url'], use_column_width=True)
                             st.markdown(f"**`{item.get('Item_SKU', 'N/A')}`**")
+
+                            # UPGRADE: st.code creates a native 1-tap copy button box!
+                            sku_val = item.get('Item_SKU', 'N/A')
+                            st.code(sku_val, language=None)
+
                             cost = item.get('Sourcing_Price', 0)
                             st.caption(f"Cost: **₹{float(cost):,.0f}**")
                             tags = item.get('tags', '')
