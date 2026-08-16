@@ -14,8 +14,8 @@ genai.configure(api_key=st.secrets["gemini"]["api_key"])
 # Data Imports
 
 from data.ingestion import load_data, load_sourcing_vault
-from data.storage import upload_to_cloudinary
-from data.sourcing import compress_image, save_to_sourcing_vault
+from data.storage import upload_to_cloudinary, delete_from_cloudinary
+from data.sourcing import compress_image, save_to_sourcing_vault, delete_from_sourcing_vault
 from data.sales import log_new_sale, load_sales_data
 
 # Engine Imports
@@ -449,8 +449,8 @@ def main():
 
                     st.divider()
                     
-                    # 🚀 THE FIX: Restoring Custom Pricing safely inside a Form
-                    with st.expander("⚙️ Custom Prices (Optional)", expanded=False):
+                    # FIX: Restoring Custom Pricing safely inside a Form
+                    with st.expander("⚙️ (click here) to Enter your Custom Pricing", expanded=False):
                         st.caption("Leave at ₹0.0 to auto-calculate (1.8x, 1.5x, 1.2x). Enter a value to set a custom price.")
                         p_col1, p_col2, p_col3 = st.columns(3)
                         custom_std_override = p_col1.number_input("Standard (₹)", min_value=0.0, step=50.0, value=0.0)
@@ -506,27 +506,45 @@ def main():
                 ["All", "Choker Set", "Earrings", "Bangles", "Polki", "Kundan", "Ring", "Other"],
                 key="gallery_filter"
             )
-            vault_df = load_sourcing_vault()
-            if not vault_df.empty:
-                recent_items = vault_df.tail(6).iloc[::-1]  
+
+            if filter_cat != "All":
+                    display_df = vault_df[vault_df['tags'].astype(str).str.contains(filter_cat, case=False, na=False)]
+            else:
+                    display_df = vault_df
+
+            recent_items = display_df.tail(6).iloc[::-1]  
                 
+            if not recent_items.empty:
                 grid_cols = st.columns(2)
                 for idx, (_, item) in enumerate(recent_items.iterrows()):
-                    with grid_cols[idx % 2]:
+                     with grid_cols[idx % 2]:
                         with st.container(border=True):
                             if 'image_url' in item and str(item['image_url']).strip():
                                 st.image(item['image_url'], use_column_width=True)
-                            st.markdown(f"**`{item.get('Item_SKU', 'N/A')}`**")
-
-                            # UPGRADE: st.code creates a native 1-tap copy button box!
+                                
                             sku_val = item.get('Item_SKU', 'N/A')
                             st.code(sku_val, language=None)
-
+                                
                             cost = item.get('Sourcing_Price', 0)
                             st.caption(f"Cost: **₹{float(cost):,.0f}**")
                             tags = item.get('tags', '')
                             if tags:
                                 st.caption(f"🏷️ {tags}")
+
+                            # 🚀 MOBILE UPGRADE: Garbage Collection Button
+                            if st.button("🗑️ Delete", key=f"del_vault_{sku_val}_{idx}", use_container_width=True):
+                                with st.spinner("Deleting from Cloud & Database..."):
+                                    cloud_cleared = delete_from_cloudinary(sku_val)
+                                    sheet_cleared = delete_from_sourcing_vault(sku_val)
+                                        
+                                    if sheet_cleared:
+                                        st.toast(f"✅ {sku_val} permanently deleted.", icon="🗑️")
+                                        st.cache_data.clear() # Force Streamlit to fetch the fresh, pruned database
+                                        st.rerun()
+                                    else:
+                                        st.error("⚠️ Failed to delete item from database.")
+                else:
+                    st.info(f"No {filter_cat} items found in the vault yet.")
 
         with tab6:
             st.subheader("🔴 Live Broadcast Assistant")

@@ -5,6 +5,7 @@ import io
 import time
 import gspread
 from data.ingestion import init_connection
+import logging
 
 def compress_image(image_bytes, max_size=(800, 800), quality=80):
     img = Image.open(io.BytesIO(image_bytes))
@@ -47,5 +48,38 @@ def save_to_sourcing_vault(sku, price, tags, image_url, std_price, vip_price, cl
         st.error("Spreadsheet Not Found: Please ensure the Google Sheet is named exactly 'Jewelry Business DB' and shared with the Service Account.")
         return False
     except Exception as e:
-        st.error(f"Failed to update Google Sheet: {e}")
+        logging.error(f"Failed to update Google Sheet: {e}", exc_info=True)
+        return False
+
+def delete_from_sourcing_vault(sku):
+    """
+    Finds the specific SKU in the Sourcing_Vault tab and deletes the entire row.
+    """
+    try:
+        client = init_connection()
+        
+        sheet_id = st.secrets.get("spreadsheet_id") or st.secrets.get("gcp_service_account", {}).get("spreadsheet_id")
+        if sheet_id:
+            try:
+                sh = client.open_by_key(sheet_id)
+            except Exception:
+                sh = client.open("Jewelry Business DB")
+        else:
+            sh = client.open("Jewelry Business DB")
+            
+        sheet = sh.worksheet("Sourcing_Vault")
+        
+        # Search the entire sheet for the exact SKU string
+        cell = sheet.find(sku)
+        
+        if cell:
+            # Delete the specific row where the SKU was found
+            sheet.delete_rows(cell.row)
+            return True
+        else:
+            # If the SKU isn't found, it might have already been deleted manually
+            return True 
+            
+    except Exception as e:
+        logging.error(f"Google Sheets Deletion Failure: {e}", exc_info=True)
         return False
