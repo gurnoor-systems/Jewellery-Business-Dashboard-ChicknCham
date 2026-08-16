@@ -8,7 +8,7 @@ from data.security import encrypt_pii
 
 def log_new_sale(formal_name, handle, line_items_df, total_pieces, total_cost, courier, amount_paid, payment_status):
 
-    # Inside your log_new_sale function, encrypt before sending to Google Sheets:
+    # Inside log_new_sale function, encrypt before sending to Google Sheets:
     secure_handle = encrypt_pii(handle)
     secure_name = encrypt_pii(formal_name)
     """

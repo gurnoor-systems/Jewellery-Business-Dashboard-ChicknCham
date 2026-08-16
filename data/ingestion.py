@@ -13,11 +13,6 @@ def init_connection():
 
 @st.cache_data(ttl=600) 
 def load_data():
-    # Inside your load_data function, decrypt immediately after downloading:
-    if 'Client Formal Name' in df_sales.columns:
-        df_sales['Client Formal Name'] = df_sales['Client Formal Name'].apply(decrypt_pii)
-    if 'Instagram/Facebook Handle' in df_sales.columns:
-        df_sales['Instagram/Facebook Handle'] = df_sales['Instagram/Facebook Handle'].apply(decrypt_pii)
 
     client = init_connection()
     sheet = client.open("Jewelry Business DB")
@@ -32,8 +27,14 @@ def load_data():
     # DEFENSE 2: Strip invisible trailing spaces
     df_sales.columns = df_sales.columns.str.strip()
     df_sourcing.columns = df_sourcing.columns.str.strip()
+
+    # DEFENSE 4: Inside load_data function, decrypt immediately after downloading:
+    if 'Client Formal Name' in df_sales.columns:
+        df_sales['Client Formal Name'] = df_sales['Client Formal Name'].apply(decrypt_pii)
+    if 'Instagram/Facebook Handle' in df_sales.columns:
+        df_sales['Instagram/Facebook Handle'] = df_sales['Instagram/Facebook Handle'].apply(decrypt_pii)
     
-    # DEFENSE 3: Format dates safely
+    # DEFENSE 4: Format dates safely
     if 'Date of Sale' in df_sales.columns:
         df_sales['Date of Sale'] = pd.to_datetime(df_sales['Date of Sale'], errors='coerce')
     else:
