@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+from data.security import decrypt_pii
 
 @st.cache_resource
 def init_connection():
@@ -12,6 +13,12 @@ def init_connection():
 
 @st.cache_data(ttl=600) 
 def load_data():
+    # Inside your load_data function, decrypt immediately after downloading:
+    if 'Client Formal Name' in df_sales.columns:
+        df_sales['Client Formal Name'] = df_sales['Client Formal Name'].apply(decrypt_pii)
+    if 'Instagram/Facebook Handle' in df_sales.columns:
+        df_sales['Instagram/Facebook Handle'] = df_sales['Instagram/Facebook Handle'].apply(decrypt_pii)
+
     client = init_connection()
     sheet = client.open("Jewelry Business DB")
     

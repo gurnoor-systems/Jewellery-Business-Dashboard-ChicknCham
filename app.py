@@ -57,26 +57,46 @@ hide_st_style = """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
 # ==========================================
-# 2. SECURITY WALL
+# 2. SECURITY WALL and TTL TIMEOUT
 # ==========================================
 
+SESSION_TIMEOUT_SECONDS = 900  # 15 minutes of inactivity allowed
+
 def check_password():
-    """Returns True if the user entered the correct password."""
+    """Returns True if the user entered the correct password and the session is fresh """
     
     # 1. Fast-Pass: If already authenticated, skip the checks and grant access immediately.
     # This completely protects the app from logging you out during PDF downloads.
+
+    current_time = time.time()
+
+    # 1. TTL Expiry Check
     if st.session_state.get("password_correct", False):
-        return True
+        last_active = st.session_state.get("last_active_time", current_time)
+
+        # If idle time exceeds our limit, kill the session
+        if (current_time - last_active) > SESSION_TIMEOUT_SECONDS:
+            st.session_state["password_correct"] = False
+            st.session_state["last_active_time"] = None
+            st.warning("⏱️ Session timed out due to inactivity. Please log in again.")
+            # Drops down to render the login UI below
+        else:
+            # Session is valid: update the timestamp to right now
+            st.session_state["last_active_time"] = current_time
+            return True
         
     # 2. Verification Logic
     def verify_password():
         input_pass = st.session_state.get("admin_password_input", "")
         input_hash = hashlib.sha256(input_pass.encode()).hexdigest()
         if input_hash == st.secrets["admin"]["password_hash"]:
+
             st.session_state["password_correct"] = True
+            st.session_state["last_active_time"] = time.time() # Start the clock
+
         else:
             st.session_state["password_correct"] = False
-            
+
     # 3. Login UI
     st.markdown("### 🔐 Secure Login Required")
     st.text_input(
@@ -105,8 +125,8 @@ def main():
         st.markdown("Enter your recent advertising spend to calculate acquisition costs.")
 
         weekly_spend = st.number_input(
-            "Weekly Ad Spend (₹)", 
-            min_value=0.0, 
+            "Weekly Ad Spend (₹)",
+            min_value=0.0,
             value=0.0,
             help="Enter any amount. Type directly or use arrows."
         )
