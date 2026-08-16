@@ -393,147 +393,127 @@ def main():
 
         with tab5:
             st.subheader("Point of Source (POS+)")
-            st.caption("Catalog inventory with images, pricing, and tags for retrieval during live sessions.")
+            st.caption("Snap a photo. Let the AI do the heavy lifting.")
 
-            # --- OPTIMIZATION 2: The Continuous Loop Setup ---
-            # Initialize a dynamic key counter. When this counter changes, Streamlit instantly deletes the old form.
-            
+            # Initialize a dynamic key counter for rapid-fire resets
             if 'vault_form_key' not in st.session_state:
                 st.session_state.vault_form_key = 0
-            
             svfk = st.session_state.vault_form_key
             
-            # --- OPTIMIZATION 3: AI State Management ---
             # Pre-initialize the form fields in memory so the AI can safely overwrite them
             if f"vault_cat_{svfk}" not in st.session_state:
                 st.session_state[f"vault_cat_{svfk}"] = "Choker Set"
             if f"vault_tags_{svfk}" not in st.session_state:
                 st.session_state[f"vault_tags_{svfk}"] = ""
 
-            # Main Ingestion Container
-            
+            # --- STEP 1: CAPTURE ---
             with st.container(border=True):
-                col_capture, col_form = st.columns([1, 1], gap="medium")
+                st.markdown("##### 📸 Step 1: Capture Item")
+                camera_photo = st.camera_input("Take Photo", key=f"vault_cam_{svfk}")
+                uploaded_photo = st.file_uploader("Or upload from gallery", type=["jpg", "png", "jpeg"], key=f"vault_upload_{svfk}")
+                active_photo = camera_photo or uploaded_photo
 
-                # Bordered Container 1
-                with col_capture:
-                    with st.container(border=True):
-                        st.markdown("##### 📸 Capture Item to be logged")
-                        camera_photo = st.camera_input("Take Photo", key=f"vault_cam_{svfk}")
-                        uploaded_photo = st.file_uploader("Or upload high-resolution image", type=["jpg", "png", "jpeg"], key=f"vault_upload_{svfk}")
-                        active_photo = camera_photo or uploaded_photo
+            # --- THE AI OBSERVER ---
+            if active_photo:
+                current_img_id = getattr(active_photo, 'file_id', 'live_camera_feed')
+                if st.session_state.get(f"analyzed_img_{svfk}") != current_img_id:
+                    with st.spinner("✨ AI is analyzing this piece..."):
+                        img = Image.open(active_photo)
+                        img.thumbnail((500, 500)) 
+                        
+                        ai_cat, ai_tags = auto_tag_jewelry(img)
+                        
+                        st.session_state[f"vault_cat_{svfk}"] = ai_cat
+                        st.session_state[f"vault_tags_{svfk}"] = ai_tags
+                        st.session_state[f"analyzed_img_{svfk}"] = current_img_id
+                        st.rerun()
 
-                # --- 🧠 THE AI OBSERVER ---
-                if active_photo:
-                    current_img_id = getattr(active_photo, 'file_id', 'live_camera_feed')
-                    # Check if we have already analyzed this specific image
-                    if st.session_state.get(f"analyzed_img_{svfk}") != current_img_id:
-                        with st.spinner("⚡ AI Auto-Tagging..."):
-                            img = Image.open(active_photo)
-                            img.thumbnail((500, 500)) # Heavy compression for lightning-fast analysis
-                            
-                            # Call the engine
-                            ai_cat, ai_tags = auto_tag_jewelry(img)
-                            
-                            # Force the AI's answers directly into the Streamlit UI widgets
-                            st.session_state[f"vault_cat_{svfk}"] = ai_cat
-                            st.session_state[f"vault_tags_{svfk}"] = ai_tags
-                            st.session_state[f"analyzed_img_{svfk}"] = current_img_id
-                            
-                            # Rerun the page instantly to display the filled forms
-                            st.rerun()
+                # --- STEP 2: REVIEW & SAVE (Form blocks all UI refreshes!) ---
+                with st.form(key=f"save_item_form_{svfk}", clear_on_submit=True):
+                    st.markdown("##### 📝 Step 2: Verify & Price")
+                    st.info("The AI has pre-filled the category and tags. Just add the cost!")
+                    
+                    category = st.selectbox(
+                        "Category", 
+                        ["Choker Set", "Earrings", "Bangles", "Polki", "Kundan", "Ring", "Other"], 
+                        index=["Choker Set", "Earrings", "Bangles", "Polki", "Kundan", "Ring", "Other"].index(st.session_state[f"vault_cat_{svfk}"])
+                    )
 
-                # Bordered Container 2
-                with col_form:
-                    with st.container(border=True):
-                        st.markdown("##### 📝 Item Details")
-                
-                        category = st.selectbox("Category", ["Choker Set", "Earrings", "Bangles", "Polki", "Kundan", "Other"], key=f"vault_cat_{svfk}")
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        sourcing_price = st.number_input("Sourcing Price (₹)", min_value=0.0, step=50.0, value=500.0)
+                    with c2:
+                        stock_qty = st.number_input("Stock Quantity", min_value=1, step=1, value=1)
 
-                        # Stock Quantity Input
-                        c1, c2 = st.columns(2)
-                        with c1:
-                            sourcing_price = st.number_input("Sourcing Price (₹)", min_value=0.0, step=50.0, value=500.0, key=f"vault_price_{svfk}")
-                        with c2:
-                            stock_qty = st.number_input("Stock Quantity", min_value=1, step=1, value=1, key=f"vault_qty_{svfk}")
+                    raw_tags = st.text_input("Additional Tags", value=st.session_state[f"vault_tags_{svfk}"], placeholder="e.g., Mint Green, Pearl Drops")
 
-                        raw_tags = st.text_input("Additional Tags (to be used in case of low network connectivity)", placeholder="e.g., Mint Green, Pearl Drops", key=f"vault_tags_{svfk}")
+                    st.divider()
+                    
+                    # 🚀 THE FIX: Restoring Custom Pricing safely inside a Form
+                    with st.expander("⚙️ Override Target Prices (Optional)", expanded=False):
+                        st.caption("Leave at ₹0.0 to auto-calculate (1.8x, 1.5x, 1.2x). Enter a value to set a custom price.")
+                        p_col1, p_col2, p_col3 = st.columns(3)
+                        custom_std_override = p_col1.number_input("Standard (₹)", min_value=0.0, step=50.0, value=0.0)
+                        custom_vip_override = p_col2.number_input("VIP (₹)", min_value=0.0, step=50.0, value=0.0)
+                        custom_clr_override = p_col3.number_input("Clearance (₹)", min_value=0.0, step=50.0, value=0.0)
 
-                        combined_tags = f"{category}, {raw_tags}" if raw_tags else category
-                
-                        st.divider()
-
-                        # --- OPTIMIZATION 1: Screen Real Estate ---
-                        # Hide the manual overrides by default to save mobile scrolling
-
-                        with st.expander("⚙️ Edit Target Prices (Auto-Calculated)", expanded=False):
-                            st.caption("Edit these targets to save custom prices to the vault.")
-                            p_col1, p_col2, p_col3 = st.columns(3)
-                            custom_std = p_col1.number_input("Standard", value=float(sourcing_price * 1.8), step=10.0, key=f"std_price_{svfk}")
-                            custom_vip = p_col2.number_input("VIP", value=float(sourcing_price * 1.5), step=10.0, key=f"vip_price_{svfk}")
-                            custom_clr = p_col3.number_input("Clearance", value=float(sourcing_price * 1.2), step=10.0, key=f"clr_price_{svfk}")
-
-                        generated_sku = f"JK-{int(time.time())}-{uuid.uuid4().hex[:4].upper()}"
-                
-                        save_btn = st.button("💾 Save to Vault", type="primary", use_container_width=True, key=f"save_vault_btn_{svfk}")
-
-            if save_btn and active_photo:
-                with st.spinner("Compressing image & updating Vault..."):
-                    raw_bytes = active_photo.getvalue()
-                    compressed_bytes = compress_image(raw_bytes)
-                    cdn_url = upload_to_cloudinary(compressed_bytes, generated_sku)
-
-                    if "🚨" not in cdn_url:
-                        # all 7 variables to the backend
-                        is_saved = save_to_sourcing_vault(
-                            generated_sku, 
-                            sourcing_price, 
-                            combined_tags, 
-                            cdn_url, 
-                            custom_std, 
-                            custom_vip, 
-                            custom_clr,
-                            stock_qty
-                        )
-                
-                        if is_saved:
-                            st.session_state.vault_form_key += 1
-                            st.toast(f"✅ Saved {generated_sku}! Ready for next item.", icon="🎉")
-                            st.cache_data.clear() # Force the mini-gallery to show the new item
-                            st.rerun() # Instantly reload the UI with the fresh form
-
-                        else:
-                            st.error("⚠️ Failed to update Google Sheet ledger.")
-
-                    else:
-                        st.error(cdn_url)
+                    generated_sku = f"JK-{int(time.time())}-{uuid.uuid4().hex[:4].upper()}"
             
-            # 3. Recently Cataloged Mini-Gallery
+                    save_btn = st.form_submit_button("💾 Save to Vault", type="primary", use_container_width=True)
 
+                    if save_btn:
+                        with st.spinner("Securing to database..."):
+                            raw_bytes = active_photo.getvalue()
+                            compressed_bytes = compress_image(raw_bytes)
+                            cdn_url = upload_to_cloudinary(compressed_bytes, generated_sku)
+
+                            if "🚨" not in cdn_url:
+                                combined_tags = f"{category}, {raw_tags}" if raw_tags else category
+                                
+                                # Backend Math Override Logic
+                                final_std = custom_std_override if custom_std_override > 0 else float(sourcing_price * 1.8)
+                                final_vip = custom_vip_override if custom_vip_override > 0 else float(sourcing_price * 1.5)
+                                final_clr = custom_clr_override if custom_clr_override > 0 else float(sourcing_price * 1.2)
+
+                                is_saved = save_to_sourcing_vault(
+                                    generated_sku, 
+                                    sourcing_price, 
+                                    combined_tags, 
+                                    cdn_url, 
+                                    final_std, 
+                                    final_vip, 
+                                    final_clr,
+                                    stock_qty
+                                )
+                        
+                                if is_saved:
+                                    st.session_state.vault_form_key += 1
+                                    st.toast(f"✅ Saved {generated_sku}! Ready for next item.", icon="🎉")
+                                    st.balloons() # UX Delight for the client
+                                    st.cache_data.clear() 
+                                    st.rerun() 
+                                else:
+                                    st.error("⚠️ Failed to update database.")
+                            else:
+                                st.error(cdn_url)
+
+            # 3. Recently Cataloged Mini-Gallery
             st.divider()
             st.markdown("##### 🕒 Recently Cataloged Inventory")
             
             vault_df = load_sourcing_vault()
             if not vault_df.empty:
-                recent_items = vault_df.tail(6).iloc[::-1]  # Display last 6 items
+                recent_items = vault_df.tail(6).iloc[::-1]  
                 
-                # Render in a clean 2-column mobile-friendly grid
                 grid_cols = st.columns(2)
-                
                 for idx, (_, item) in enumerate(recent_items.iterrows()):
                     with grid_cols[idx % 2]:
                         with st.container(border=True):
-                            # Display item image
                             if 'image_url' in item and str(item['image_url']).strip():
                                 st.image(item['image_url'], use_column_width=True)
-                            
-                            # Item metadata
                             st.markdown(f"**`{item.get('Item_SKU', 'N/A')}`**")
-                            
-                            # Price & category tags
                             cost = item.get('Sourcing_Price', 0)
                             st.caption(f"Cost: **₹{float(cost):,.0f}**")
-                            
                             tags = item.get('tags', '')
                             if tags:
                                 st.caption(f"🏷️ {tags}")
