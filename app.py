@@ -450,7 +450,7 @@ def main():
                     st.divider()
                     
                     # 🚀 THE FIX: Restoring Custom Pricing safely inside a Form
-                    with st.expander("⚙️ Override Target Prices (Optional)", expanded=False):
+                    with st.expander("⚙️ Custom Prices (Optional)", expanded=False):
                         st.caption("Leave at ₹0.0 to auto-calculate (1.8x, 1.5x, 1.2x). Enter a value to set a custom price.")
                         p_col1, p_col2, p_col3 = st.columns(3)
                         custom_std_override = p_col1.number_input("Standard (₹)", min_value=0.0, step=50.0, value=0.0)
