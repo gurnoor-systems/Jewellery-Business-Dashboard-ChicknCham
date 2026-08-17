@@ -7,6 +7,7 @@ import google.generativeai as genai
 from PIL import Image
 import io
 import logging
+import numpy as np
 
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 genai.configure(api_key=st.secrets["gemini"]["api_key"])

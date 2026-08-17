@@ -7,7 +7,7 @@ def engine_cost_profitability(df_sales, df_sourcing):
     """
     Calculates True Profit, top performers, and Dead Stock alerts.
     """
-    # Default fallback values for when the database is empty
+
     total_sales = 0.0
     true_profit = 0.0
     top_performer = "N/A"
@@ -178,12 +178,37 @@ def generate_financial_charts(df_sales):
 
         if all_items:
             items_df = pd.DataFrame(all_items)
-            category_grouped = items_df.groupby('Category')['Quantity'].sum().reset_index()
+
+            if 'Category' not in items_df.columns:
+                items_df['Category'] = 'Unknown'
+            if 'Custom Details' not in items_df.columns:
+                items_df['Custom Details'] = ''
+
+            def format_display_category(row):
+
+                cat = str(row.get('Category', '')).strip().title()
+                details = str(row.get('Custom Details', '')).strip()
+                
+                if cat == 'Other' and details and details.lower() != 'nan':
+
+                    short_details = details[:15] + "..." if len(details) > 15 else details
+                    return f"Other: {short_details}"
+                return cat
+
+            items_df['Display_Category'] = items_df.apply(format_display_category, axis=1)
+            
+            # Group by the newly cleaned column using the correct DataFrame (items_df)
+            category_sales = items_df.groupby('Display_Category')['Quantity'].sum().reset_index()            
             
             fig_donut = px.pie(
-                category_grouped, names='Category', values='Quantity', hole=0.4,
-                title="Sales by Category", color_discrete_sequence=px.colors.qualitative.Pastel
+                category_sales, 
+                values='Quantity', 
+                names='Display_Category', 
+                hole=0.45,
             )
-            fig_donut.update_layout(margin=dict(t=30, b=10, l=10, r=10))
+            fig_donut.update_layout(
+                title="Sales Distribution by Category",
+                margin=dict(t=40, b=10, l=10, r=10)
+            )
 
     return fig_trend, fig_donut
