@@ -15,7 +15,7 @@ genai.configure(api_key=st.secrets["gemini"]["api_key"])
 
 from data.ingestion import load_data, load_sourcing_vault
 from data.storage import upload_to_cloudinary, delete_from_cloudinary
-from data.sourcing import compress_image, save_to_sourcing_vault, delete_from_sourcing_vault
+from data.sourcing import compress_image, save_to_sourcing_vault, delete_from_sourcing_vault, restock_inventory
 from data.sales import log_new_sale, load_sales_data
 
 # Engine Imports
@@ -558,17 +558,34 @@ def main():
                                 if tags:
                                     st.caption(f"🏷️ {tags}")
 
-                            if st.button("🗑️ Delete", key=f"del_vault_{sku_val}_{idx}", use_container_width=True):
-                                with st.spinner("Deleting from Cloud & Database..."):
-                                    cloud_cleared = delete_from_cloudinary(sku_val)
-                                    sheet_cleared = delete_from_sourcing_vault(sku_val)
+                                # UPGRADE: The Restock Loop
+                                with st.expander("📦 Restock Item"):
+                                    r_col1, r_col2 = st.columns([2, 3])
+                                    with r_col1:
+                                        add_qty = st.number_input("Qty", min_value=1, step=1, value=1, key=f"add_qty_{sku_val}_{idx}")
+                                    with r_col2:
+                                        # Use a blank markdown to push the button down slightly to align with the input box
+                                        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+                                        if st.button("➕ Confirm", key=f"restock_btn_{sku_val}_{idx}", use_container_width=True):
+                                            with st.spinner("Restocking..."):
+                                                if restock_inventory(sku_val, add_qty):
+                                                    st.toast(f"✅ {sku_val} restocked by {add_qty}!", icon="📦")
+                                                    st.cache_data.clear() # Force UI to pull the fresh numbers
+                                                    st.rerun()
+                                                else:
+                                                    st.error("⚠️ Failed to update database.")
+
+                                if st.button("🗑️ Delete", key=f"del_vault_{sku_val}_{idx}", use_container_width=True):
+                                    with st.spinner("Deleting from Cloud & Database..."):
+                                        cloud_cleared = delete_from_cloudinary(sku_val)
+                                        sheet_cleared = delete_from_sourcing_vault(sku_val)
                                         
-                                    if sheet_cleared:
-                                        st.toast(f"✅ {sku_val} permanently deleted.", icon="🗑️")
-                                        st.cache_data.clear() # Force Streamlit to fetch the fresh, pruned database
-                                        st.rerun()
-                                    else:
-                                        st.error("⚠️ Failed to delete item from database.")
+                                        if sheet_cleared:
+                                            st.toast(f"✅ {sku_val} permanently deleted.", icon="🗑️")
+                                            st.cache_data.clear() # Force Streamlit to fetch the fresh, pruned database
+                                            st.rerun()
+                                        else:
+                                            st.error("⚠️ Failed to delete item from database.")
                 else:
                     st.info(f"No {filter_cat} items found in the vault yet.")
 

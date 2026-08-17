@@ -149,3 +149,47 @@ def batch_deduct_inventory(cart_items):
     except Exception as e:
         logging.error(f"Batch Inventory Deduct Failure: {e}", exc_info=True)
         return False
+
+def restock_inventory(sku, additional_qty):
+    """
+    Increases the stock quantity for a specific SKU in the Sourcing_Vault.
+    """
+    if additional_qty <= 0:
+        return True
+        
+    try:
+        client = init_connection()
+        sheet_id = st.secrets.get("spreadsheet_id") or st.secrets.get("gcp_service_account", {}).get("spreadsheet_id")
+        sh = client.open_by_key(sheet_id) if sheet_id else client.open("Jewelry Business DB")
+        sheet = sh.worksheet("Sourcing_Vault")
+        
+        # 1. Locate the SKU
+        cell = sheet.find(sku)
+        if not cell:
+            logging.error(f"SKU {sku} not found for restocking.")
+            return False
+            
+        row_idx = cell.row
+        headers = sheet.row_values(1)
+        
+        if "Stock_Quantity" not in headers:
+            return False
+            
+        col_idx = headers.index("Stock_Quantity") + 1
+        
+        # 2. Read current stock and calculate the new total
+        current_stock_str = sheet.cell(row_idx, col_idx).value
+        try:
+            current_stock = int(current_stock_str) if str(current_stock_str).strip() != "" else 0
+        except ValueError:
+            current_stock = 0
+            
+        new_stock = current_stock + additional_qty
+        
+        # 3. Write the updated stock back to the sheet
+        sheet.update_cell(row_idx, col_idx, new_stock)
+        return True
+        
+    except Exception as e:
+        logging.error(f"Restock Failure: {e}", exc_info=True)
+        return False
