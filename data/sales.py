@@ -5,6 +5,8 @@ from datetime import datetime
 import pytz
 from data.ingestion import init_connection
 from data.security import encrypt_pii
+from data.sourcing import batch_deduct_inventory
+import logging
 
 def log_new_sale(formal_name, handle, line_items_df, total_pieces, total_cost, courier, amount_paid, payment_status):
 
@@ -81,7 +83,35 @@ def log_new_sale(formal_name, handle, line_items_df, total_pieces, total_cost, c
                         vault_sheet.update_cell(cell.row, 8, new_stock)
         except Exception as e:
             st.warning(f"Sale logged perfectly, but inventory deduction failed: {e}")
+
+        # ==========================================
+        #  PHASE 1: REAL-TIME INVENTORY SYNC
+        # ==========================================
+        try:
+            cart_items_for_sync = []
+        
+            # 1. Extract valid SKUs and quantities from the line items
+            for _, row in line_items_df.iterrows():
+                sku = str(row.get('Item_SKU', '')).strip()
+                qty = row.get('Quantity', 0)
             
+                # Skip custom items or blanks that shouldn't affect the Sourcing Vault
+                if sku and sku.upper() != 'N/A':
+                    try:
+                        if int(qty) > 0:
+                            cart_items_for_sync.append({'sku': sku, 'qty': int(qty)})
+                    except ValueError:
+                        pass
+                    
+            # 2. Fire the batch payload
+            if cart_items_for_sync:
+                sync_success = batch_deduct_inventory(cart_items_for_sync)
+                if not sync_success:
+                    logging.warning("Financial sale logged successfully, but inventory sync failed.")
+                
+        except Exception as e:
+            logging.error(f"Inventory Sync Integration Error: {e}", exc_info=True)
+
         return True
         
     except Exception as e:

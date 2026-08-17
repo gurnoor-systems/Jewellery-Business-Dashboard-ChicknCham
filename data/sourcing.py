@@ -83,3 +83,69 @@ def delete_from_sourcing_vault(sku):
     except Exception as e:
         logging.error(f"Google Sheets Deletion Failure: {e}", exc_info=True)
         return False
+
+def batch_deduct_inventory(cart_items):
+    """
+    Deducts stock for a batch of SKUs in a single Google Sheets API call.
+    Expects cart_items as a list of dicts: [{'sku': 'JK-123...', 'qty': 2}, ...]
+    """
+    if not cart_items:
+        return True
+
+    try:
+        # Securely connect to the database
+        client = init_connection()
+        sheet_id = st.secrets.get("spreadsheet_id") or st.secrets.get("gcp_service_account", {}).get("spreadsheet_id")
+        sh = client.open_by_key(sheet_id) if sheet_id else client.open("Jewelry Business DB")
+        sheet = sh.worksheet("Sourcing_Vault")
+
+        # 1. Fetch current database state
+        all_data = sheet.get_all_records()
+        headers = sheet.row_values(1)
+        
+        # Ensure the column actually exists to prevent crashes
+        if "Stock_Quantity" not in headers:
+            logging.error("Column 'Stock_Quantity' missing in Sourcing_Vault.")
+            return False
+            
+        col_idx = headers.index("Stock_Quantity") + 1
+        updates = []
+
+        # 2. Match SKUs and calculate safe deductions
+        for idx, row in enumerate(all_data):
+            sku = str(row.get("Item_SKU", "")).strip()
+            
+            for item in cart_items:
+                if item['sku'] == sku:
+                    try:
+                        sold_qty = int(item['qty'])
+                        # Handle empty cells safely
+                        current_stock = row.get("Stock_Quantity", 0)
+                        current_stock = int(current_stock) if str(current_stock).strip() != "" else 0
+                    except ValueError:
+                        continue
+                        
+                    # 🚀 The Oversell Protection (The Floor)
+                    new_stock = max(0, current_stock - sold_qty)
+                    
+                    # Row index is idx + 2 (1 for header, 1 because gspread is 1-indexed)
+                    row_idx = idx + 2 
+                    
+                    # Prepare the A1 notation cell target (e.g., 'H4')
+                    cell_target = gspread.utils.rowcol_to_a1(row_idx, col_idx)
+                    
+                    updates.append({
+                        'range': cell_target,
+                        'values': [[new_stock]]
+                    })
+                    break # Move to next database row once matched
+
+        # 3. Execute the single batch update payload
+        if updates:
+            sheet.batch_update(updates)
+            
+        return True
+        
+    except Exception as e:
+        logging.error(f"Batch Inventory Deduct Failure: {e}", exc_info=True)
+        return False
