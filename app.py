@@ -499,39 +499,65 @@ def main():
 
             # 3. Recently Cataloged Mini-Gallery
             st.divider()
-            st.markdown("##### 🕒 Recently Cataloged Inventory")
+            st.markdown("##### 🕒 Cataloged Inventory")
 
-            filter_cat = st.selectbox(
-                "Filter by Category", 
-                ["All", "Choker Set", "Earrings", "Bangles", "Polki", "Kundan", "Ring", "Other"],
-                key="gallery_filter"
-            )
-
-            if filter_cat != "All":
-                    display_df = vault_df[vault_df['tags'].astype(str).str.contains(filter_cat, case=False, na=False)]
-            else:
-                    display_df = vault_df
-
-            recent_items = display_df.tail(6).iloc[::-1]  
+            vault_df = load_sourcing_vault()
+            if not vault_df.empty:
+                # 🚀 MOBILE UPGRADE: Category & Soft Archival Filters
+                col_filt1, col_filt2 = st.columns([1.5, 1])
+                with col_filt1:
+                    filter_cat = st.selectbox(
+                        "Filter", 
+                        ["All", "Choker Set", "Earrings", "Bangles", "Polki", "Kundan", "Ring", "Other"],
+                        key="gallery_filter",
+                        label_visibility="collapsed"
+                    )
+                with col_filt2:
+                    hide_sold_out = st.toggle("Hide Sold Out", value=True)
                 
-            if not recent_items.empty:
-                grid_cols = st.columns(2)
-                for idx, (_, item) in enumerate(recent_items.iterrows()):
-                     with grid_cols[idx % 2]:
-                        with st.container(border=True):
-                            if 'image_url' in item and str(item['image_url']).strip():
-                                st.image(item['image_url'], use_column_width=True)
-                                
-                            sku_val = item.get('Item_SKU', 'N/A')
-                            st.code(sku_val, language=None)
-                                
-                            cost = item.get('Sourcing_Price', 0)
-                            st.caption(f"Cost: **₹{float(cost):,.0f}**")
-                            tags = item.get('tags', '')
-                            if tags:
-                                st.caption(f"🏷️ {tags}")
+                # Apply Pandas filtering logic based on selections
+                display_df = vault_df.copy()
+                
+                # 1. Soft Archival Filter
+                # Safely convert to numeric, turning blanks into 0
+                display_df['Stock_Quantity'] = pd.to_numeric(display_df.get('Stock_Quantity', 0), errors='coerce').fillna(0)
+                
+                if hide_sold_out:
+                    display_df = display_df[display_df['Stock_Quantity'] > 0]
 
-                            # 🚀 MOBILE UPGRADE: Garbage Collection Button
+                # 2. Category Filter
+                if filter_cat != "All":
+                    display_df = display_df[display_df['tags'].astype(str).str.contains(filter_cat, case=False, na=False)]
+
+                recent_items = display_df.tail(6).iloc[::-1]  
+                
+                if not recent_items.empty:
+                    grid_cols = st.columns(2)
+                    for idx, (_, item) in enumerate(recent_items.iterrows()):
+                        with grid_cols[idx % 2]:
+                            with st.container(border=True):
+                                if 'image_url' in item and str(item['image_url']).strip():
+                                    st.image(item['image_url'], use_column_width=True)
+                                
+                                sku_val = item.get('Item_SKU', 'N/A')
+                                st.code(sku_val, language=None)
+                                
+                                # 🚀 MOBILE UPGRADE: Visual Stock Badges
+                                current_stock = int(item.get('Stock_Quantity', 0))
+                                
+                                if current_stock >= 3:
+                                    st.markdown(f"**🟢 In Stock ({current_stock})**")
+                                elif current_stock > 0:
+                                    st.markdown(f"**🟡 Low Stock ({current_stock})**")
+                                else:
+                                    st.markdown(f"**🔴 SOLD OUT**")
+                                
+                                cost = item.get('Sourcing_Price', 0)
+                                st.caption(f"Cost: **₹{float(cost):,.0f}**")
+                                tags = item.get('tags', '')
+                                if tags:
+                                    st.caption(f"🏷️ {tags}")
+
                             if st.button("🗑️ Delete", key=f"del_vault_{sku_val}_{idx}", use_container_width=True):
                                 with st.spinner("Deleting from Cloud & Database..."):
                                     cloud_cleared = delete_from_cloudinary(sku_val)
