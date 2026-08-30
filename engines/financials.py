@@ -8,7 +8,9 @@ def get_clean_items_df(df_sales):
     """
     Helper function: Extracts, parses, and cleans all cart items from Paid transactions.
     """
-    # 1. Catch ALL paid statuses (Paid, Paid Online, Paid (UPI), etc.) ignoring casing
+    import streamlit as st # Injected for the X-Ray debugger
+
+    # 1. Catch ALL paid statuses (Paid, Paid Online, Paid (UPI), etc.)
     paid_mask = df_sales['Payment Status'].astype(str).str.contains('paid', case=False, na=False)
     df_paid = df_sales[paid_mask]
     
@@ -16,34 +18,57 @@ def get_clean_items_df(df_sales):
         return pd.DataFrame()
 
     all_items = []
-    for val in df_paid['Line_Items_JSON'].dropna():
-        val = str(val).strip()
-        if not val:
+    
+    # 2. Bulletproof Parsing Engine
+    for idx, val in df_paid['Line_Items_JSON'].items():
+        if pd.isna(val) or val == "":
             continue
-        try:
-            items = json.loads(val)
-            if isinstance(items, list): all_items.extend(items)
-        except Exception:
+
+        parsed_items = None
+
+        # Scenario A: The API already converted it to a list/dict in the background
+        if isinstance(val, list):
+            parsed_items = val
+        elif isinstance(val, dict):
+            parsed_items = [val]
+            
+        # Scenario B: It is a raw text string
+        elif isinstance(val, str):
+            val_str = val.strip()
+            if not val_str:
+                continue
             try:
-                items = ast.literal_eval(val)
-                if isinstance(items, list): all_items.extend(items)
-            except Exception:
-                pass
+                # Attempt 1: Standard JSON parsing
+                parsed = json.loads(val_str)
+                parsed_items = parsed if isinstance(parsed, list) else [parsed]
+            except Exception as e1:
+                try:
+                    # Attempt 2: Python string fallback
+                    parsed = ast.literal_eval(val_str)
+                    parsed_items = parsed if isinstance(parsed, list) else [parsed]
+                except Exception as e2:
+                    # THE X-RAY: Expose exactly what is crashing
+                    st.error(f"⚠️ Parsing Crash on Row {idx}! Value: `{val_str}` | Error: {e1}")
+                    continue
+
+        # Append the successful extractions
+        if parsed_items and isinstance(parsed_items, list):
+            all_items.extend(parsed_items)
 
     if not all_items:
         return pd.DataFrame()
 
     items_df = pd.DataFrame(all_items)
 
-    # 2. Force Math-Ready Quantities
+    # 3. Force Math-Ready Quantities
     if 'Quantity' not in items_df.columns:
         items_df['Quantity'] = items_df.get('Qty', items_df.get('quantity', 1))
     items_df['Quantity'] = pd.to_numeric(items_df['Quantity'], errors='coerce').fillna(1)
 
-    # 3. Standardize Categories
+    # 4. Standardize Categories
     items_df['Category'] = items_df.get('Category', 'Unknown').astype(str).str.strip().str.title()
 
-    # 4. Clean up "Other" display details
+    # 5. Clean up "Other" display details
     def format_cat(row):
         cat = str(row.get('Category', '')).strip()
         details = str(row.get('Custom Details', '')).strip().title()
