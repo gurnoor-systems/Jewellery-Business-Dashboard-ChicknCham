@@ -156,12 +156,17 @@ def generate_financial_charts(df_sales):
     fig_trend.add_trace(go.Scatter(x=df_grouped['Date of Sale'], y=df_grouped['True_Profit'], mode='lines+markers', name='True Net Profit', line=dict(color='#2E7D32', width=3)))
     fig_trend.update_layout(title="📈 Revenue vs. Net Profit Trends", hovermode="x unified", margin=dict(l=20, r=20, t=50, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
 
-    # 🚀 CALLS THE NEW UNIFIED HELPER
     fig_donut = None
     items_df = get_clean_items_df(df_sales)
     
     if not items_df.empty:
-        category_sales = items_df.groupby('Display_Category')['Quantity'].sum().reset_index()            
+        # 1. Group the data
+        category_sales = items_df.groupby('Display_Category')['Quantity'].sum().reset_index()  
+        
+        # 2. FORCE STRICT FLOAT CASTING RIGHT BEFORE PLOTLY
+        category_sales['Quantity'] = pd.to_numeric(category_sales['Quantity'], errors='coerce').fillna(1).astype(float)
+        
+        # 3. Render the chart
         fig_donut = px.pie(category_sales, values='Quantity', names='Display_Category', hole=0.45)
         fig_donut.update_layout(title="Sales Distribution by Category", margin=dict(t=40, b=10, l=10, r=10))
 
