@@ -35,7 +35,6 @@ def engine_cost_profitability(df_sales, df_sourcing):
             else:
                 courier = 0
                 
-            # The final correct math for the KPI card
             true_profit = (revenue - cost - courier).sum()
             
         # 2. Identify Top Performer
@@ -44,16 +43,40 @@ def engine_cost_profitability(df_sales, df_sourcing):
             for json_string in paid_df['Line_Items_JSON'].dropna():
                 if isinstance(json_string, str) and json_string.strip():
                     try:
-                        all_items.extend(json.loads(json_string))
+                        items = json.loads(json_string)
+                        if isinstance(items, list):
+                            all_items.extend(items)
                     except Exception:
-                        pass
+                        try:
+                            items = ast.literal_eval(json_string)
+                            if isinstance(items, list):
+                                all_items.extend(items)
+                        except Exception:
+                            pass
             
             if all_items:
                 items_df = pd.DataFrame(all_items)
-                # Finds the category that sold the highest quantity
-                top_cat = items_df.groupby('Category')['Quantity'].sum().idxmax()
-                top_performer = str(top_cat)
+
+                if 'Quantity' not in items_df.columns:
+                    if 'Qty' in items_df.columns:
+                        items_df['Quantity'] = items_df['Qty']
+                    elif 'quantity' in items_df.columns:
+                        items_df['Quantity'] = items_df['quantity']
+                    else:
+                        items_df['Quantity'] = 1
+
+                items_df['Quantity'] = pd.to_numeric(items_df['Quantity'], errors='coerce').fillna(1)
                 
+                if 'Category' not in items_df.columns:
+                    items_df['Category'] = 'Unknown'
+                
+                items_df['Category'] = items_df['Category'].astype(str).str.strip().str.title()
+                
+                category_totals = items_df.groupby('Category')['Quantity'].sum()
+                
+                if not category_totals.empty:
+                    top_performer = str(category_totals.idxmax())
+
     # 3. Dead Stock Alert
     if not df_sourcing.empty and 'Date of Purchase' in df_sourcing.columns and 'Total Amount' in df_sourcing.columns:
         try:
