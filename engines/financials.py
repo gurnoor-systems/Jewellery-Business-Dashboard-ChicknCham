@@ -179,6 +179,8 @@ def generate_financial_charts(df_sales):
         if all_items:
             items_df = pd.DataFrame(all_items)
 
+            items_df['Quantity'] = pd.to_numeric(items_df.get('Quantity', 1), errors='coerce').fillna(1)
+
             if 'Category' not in items_df.columns:
                 items_df['Category'] = 'Unknown'
             if 'Custom Details' not in items_df.columns:
@@ -187,22 +189,20 @@ def generate_financial_charts(df_sales):
             def format_display_category(row):
 
                 cat = str(row.get('Category', '')).strip().title()
-                details = str(row.get('Custom Details', '')).strip()
+                details = str(row.get('Custom Details', '')).strip().title()
                 
                 if cat == 'Other' and details and details.lower() != 'nan':
-
                     short_details = details[:15] + "..." if len(details) > 15 else details
                     return f"Other: {short_details}"
                 return cat
 
             items_df['Display_Category'] = items_df.apply(format_display_category, axis=1)
             
-            # Group by the newly cleaned column using the correct DataFrame (items_df)
             category_sales = items_df.groupby('Display_Category')['Quantity'].sum().reset_index()            
             
             fig_donut = px.pie(
                 category_sales, 
-                values='Quantity', 
+                values='Quantity',
                 names='Display_Category', 
                 hole=0.45,
             )

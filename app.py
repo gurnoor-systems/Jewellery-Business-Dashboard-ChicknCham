@@ -45,14 +45,29 @@ hide_st_style = """
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
             header {visibility: hidden;}
-            /* Hides the top-right GitHub / Toolbar menu */
-            [data-testid="stToolbar"] {visibility: hidden !important;}
-            /* Hides the "Manage App" button at the bottom right */
-            [data-testid="stAppDeployButton"] {display: none !important;}
-            .block-container {
-                padding-top: 2rem;
-                padding-bottom: 0rem;
+
+            /* Enlarge Button Touch Targets */
+            .stButton > button {
+                min-height: 48px;
+                border-radius: 8px;
+                font-weight: 600;
+                transition: all 0.2s ease-in-out;
             }
+
+            /* Enlarge Input Fields (Text, Number, Dropdowns) */
+            input, .stSelectbox div[data-baseweb="select"] {
+                min-height: 45px;
+                border-radius: 6px;
+            }
+            
+            /* Add Padding to Metric Cards */
+            div[data-testid="stMetric"] {
+                background-color: rgba(255, 255, 255, 0.05); 
+                border-radius: 10px;
+                padding: 15px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            }
+
             </style>
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
