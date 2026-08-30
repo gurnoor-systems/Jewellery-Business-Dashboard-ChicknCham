@@ -220,7 +220,7 @@ def main():
                 with col1:
                     st.markdown("#### 🏆 Top High-Value Clients")
                     
-                    for index, row in vip_data.head(5).iterrows():
+                    for index, row in vip_data.head(10).iterrows():
                         # Wrap each client in their own distinct visual box
                         with st.container(border=True):
                             # Use columns to align the data perfectly on a phone screen
