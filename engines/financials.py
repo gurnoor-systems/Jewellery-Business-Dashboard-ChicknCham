@@ -17,7 +17,7 @@ def engine_cost_profitability(df_sales, df_sourcing):
     # 1. Core Financial KPIs (Fault-Tolerant Check)
     if not df_sales.empty and 'Payment Status' in df_sales.columns:
         # Safely mask only paid transactions
-        paid_mask = df_sales['Payment Status'].astype(str).str.contains('Paid', na=False)
+        paid_mask = df_sales['Payment Status'].astype(str).str.contains('Paid Online', na=False)
         paid_df = df_sales[paid_mask]
         
         # Calculate Total Sales
@@ -102,7 +102,7 @@ def engine_cac_mom_growth(df_sales, weekly_marketing_spend):
         return 0.0, 0, 0.0
 
     # 1. Customer Acquisition Cost (CAC)
-    paid_mask = df_sales['Payment Status'].astype(str).str.contains('Paid', na=False)
+    paid_mask = df_sales['Payment Status'].astype(str).str.contains('Paid Online', na=False)
     df_paid = df_sales[paid_mask].copy()
     
     if df_paid.empty:
@@ -139,7 +139,7 @@ def generate_financial_charts(df_sales):
     """
     if df_sales.empty or 'Payment Status' not in df_sales.columns:
         return None, None
-    paid_mask = df_sales['Payment Status'].astype(str).str.contains('Paid', na=False)
+    paid_mask = df_sales['Payment Status'].astype(str).str.contains('Paid Online', na=False)
     df_paid = df_sales[paid_mask].copy()
     
     if df_paid.empty:
