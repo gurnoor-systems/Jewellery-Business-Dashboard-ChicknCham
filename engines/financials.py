@@ -2,6 +2,7 @@ import json
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
+import ast
 
 def engine_cost_profitability(df_sales, df_sourcing):
     """
@@ -172,12 +173,27 @@ def generate_financial_charts(df_sales):
             if isinstance(json_string, str) and json_string.strip():
                 try:
                     items = json.loads(json_string)
-                    all_items.extend(items)
+                    if isinstance(items, list):
+                        all_items.extend(items)
+
                 except Exception:
-                    pass
+                    try:
+                        items = ast.literal_eval(json_string)
+                        if isinstance(items, list):
+                            all_items.extend(items)
+                    except Exception:
+                        pass 
 
         if all_items:
             items_df = pd.DataFrame(all_items)
+
+            if 'Quantity' not in items_df.columns:
+                if 'Qty' in items_df.columns:
+                    items_df['Quantity'] = items_df['Qty']
+                elif 'quantity' in items_df.columns:
+                    items_df['Quantity'] = items_df['quantity']
+                else:
+                    items_df['Quantity'] = 1
 
             items_df['Quantity'] = pd.to_numeric(items_df.get('Quantity', 1), errors='coerce').fillna(1)
 
