@@ -150,6 +150,10 @@ def main():
     try:
         with st.spinner("Syncing secure database.."):
             df_sales, df_sourcing = load_data()
+
+            st.warning("X-RAY VISION ACTIVE:")
+            st.write("Columns found:", df_sales.columns.tolist())
+            st.dataframe(df_sales[['Client Formal Name', 'Payment Status', 'Total Amount Client Paid You', 'Line_Items_JSON']].tail(5))
             
         tab1, tab2, tab4, tab5, tab6, tab7, tab3 = st.tabs([
             "📊 Profitability Dashboard", 
@@ -768,7 +772,6 @@ def main():
                     })
                     st.success("Item added to cart!")
 
-            # UPGRADE: Vertical Cart Display (No Horizontal Scrolling)
             calc_pieces = 0
             calc_cost = 0.0
             calc_revenue = 0.0
