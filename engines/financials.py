@@ -1,64 +1,55 @@
-import json
+import json, ast
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
-import ast
-import streamlit as st
 
-def get_clean_items_df(df_sales):
-    """Extracts, parses, and strictly math-casts all cart items."""
-    paid_mask = df_sales.get('Payment Status', pd.Series(dtype=str)).astype(str).str.contains('paid', case=False, na=False)
-    df_paid = df_sales[paid_mask].copy()
+def extract_cart_data(df_sales):
+    """The ultimate robust JSON extractor. Parses carts and forces strict math floats."""
+    mask = df_sales.get('Payment Status', pd.Series(dtype=str)).astype(str).str.contains('paid', case=False, na=False)
+    df_paid = df_sales[mask].copy()
     
     if df_paid.empty or 'Line_Items_JSON' not in df_paid.columns:
         return pd.DataFrame()
 
     all_items = []
-    for idx, val in df_paid['Line_Items_JSON'].items():
-        if pd.isna(val) or str(val).strip() == "":
-            continue
+    for _, row_val in df_paid['Line_Items_JSON'].items():
+        if pd.isna(row_val): continue
+        val_str = str(row_val).strip()
+        if not val_str: continue
 
-        parsed_items = None
-        if isinstance(val, list):
-            parsed_items = val
-        elif isinstance(val, dict):
-            parsed_items = [val]
-        elif isinstance(val, str):
-            val_str = val.strip()
+        # Bulletproof Parsing
+        try:
+            parsed = json.loads(val_str)
+        except:
             try:
-                parsed = json.loads(val_str)
-                parsed_items = parsed if isinstance(parsed, list) else [parsed]
-            except Exception as e1:
-                try:
-                    parsed = ast.literal_eval(val_str)
-                    parsed_items = parsed if isinstance(parsed, list) else [parsed]
-                except Exception as e2:
-                    st.error(f"⚠️ JSON Parsing Error on row {idx}: {e1}")
-                    continue
+                parsed = ast.literal_eval(val_str)
+            except:
+                continue
+        
+        if isinstance(parsed, list):
+            all_items.extend(parsed)
+        elif isinstance(parsed, dict):
+            all_items.append(parsed)
 
-        if parsed_items and isinstance(parsed_items, list):
-            all_items.extend(parsed_items)
-
-    if not all_items:
-        return pd.DataFrame()
+    if not all_items: return pd.DataFrame()
 
     items_df = pd.DataFrame(all_items)
-
-    # 🚀 THE STRICT MATH CAST: Forces strings to absolute floats so Plotly cannot default to 1
-    if 'Quantity' not in items_df.columns:
-        items_df['Quantity'] = items_df.get('Qty', items_df.get('quantity', 1))
     
-    items_df['Quantity'] = pd.to_numeric(items_df['Quantity'], errors='coerce').fillna(1).astype(float)
+    # 🚀 FORCE STRICT NUMERIC QUANTITIES
+    if 'Quantity' not in items_df.columns:
+        items_df['Quantity'] = 1
+    items_df['Quantity'] = pd.to_numeric(items_df['Quantity'], errors='coerce').fillna(1.0).astype(float)
+    
     items_df['Category'] = items_df.get('Category', 'Unknown').astype(str).str.strip().str.title()
-
-    def format_cat(row):
-        cat = str(row.get('Category', '')).strip()
-        details = str(row.get('Custom Details', '')).strip().title()
-        if cat == 'Other' and details and details.lower() != 'nan':
-            return f"Other: {details[:15]}..." if len(details) > 15 else f"Other: {details}"
+    
+    def format_label(row):
+        cat = row.get('Category', '')
+        det = str(row.get('Custom Details', '')).strip().title()
+        if cat == 'Other' and det and det.lower() != 'nan':
+            return f"Other: {det[:15]}"
         return cat
-
-    items_df['Display_Category'] = items_df.apply(format_cat, axis=1)
+        
+    items_df['Display_Category'] = items_df.apply(format_label, axis=1)
     return items_df
 
 
@@ -69,41 +60,45 @@ def engine_cost_profitability(df_sales, df_sourcing):
     dead_stock_capital = 0.0
     
     if not df_sales.empty and 'Payment Status' in df_sales.columns:
-        paid_mask = df_sales['Payment Status'].astype(str).str.contains('paid', case=False, na=False)
-        paid_df = df_sales[paid_mask]
+        mask = df_sales['Payment Status'].astype(str).str.contains('paid', case=False, na=False)
+        paid_df = df_sales[mask]
         
-        if 'Total Amount Client Paid You' in df_sales.columns and 'Total Cost of These Items' in df_sales.columns:
-            revenue = pd.to_numeric(paid_df['Total Amount Client Paid You'], errors='coerce').fillna(0)
-            cost = pd.to_numeric(paid_df['Total Cost of These Items'], errors='coerce').fillna(0)
-            courier = pd.to_numeric(paid_df.get('Courier Charge You Paid', 0), errors='coerce').fillna(0)
+        # 🚀 STRIP COMMAS TO PREVENT MATH FAILURES
+        rev_clean = paid_df.get('Total Amount Client Paid You', pd.Series(dtype=str)).astype(str).str.replace(',', '')
+        cost_clean = paid_df.get('Total Cost of These Items', pd.Series(dtype=str)).astype(str).str.replace(',', '')
+        cour_clean = paid_df.get('Courier Charge You Paid', pd.Series(dtype=str)).astype(str).str.replace(',', '')
+
+        revenue = pd.to_numeric(rev_clean, errors='coerce').fillna(0)
+        cost = pd.to_numeric(cost_clean, errors='coerce').fillna(0)
+        courier = pd.to_numeric(cour_clean, errors='coerce').fillna(0)
+        
+        total_sales = revenue.sum()
+        true_profit = (revenue - cost - courier).sum()
             
-            total_sales = revenue.sum()
-            true_profit = (revenue - cost - courier).sum()
-            
-    items_df = get_clean_items_df(df_sales)
+    items_df = extract_cart_data(df_sales)
     if not items_df.empty:
         category_totals = items_df.groupby('Category')['Quantity'].sum()
         if not category_totals.empty:
             top_performer = str(category_totals.idxmax())
 
-    if not df_sourcing.empty and 'Date of Purchase' in df_sourcing.columns and 'Total Amount' in df_sourcing.columns:
+    if not df_sourcing.empty and 'Date of Purchase' in df_sourcing.columns:
         try:
             df_sourcing['Date of Purchase'] = pd.to_datetime(df_sourcing['Date of Purchase'], errors='coerce')
-            cutoff_date = pd.Timestamp.today() - pd.Timedelta(days=45)
-            dead_stock_trips = df_sourcing[df_sourcing['Date of Purchase'] < cutoff_date]
-            dead_stock_capital = pd.to_numeric(dead_stock_trips['Total Amount'], errors='coerce').fillna(0).sum()
-        except Exception:
+            cutoff = pd.Timestamp.today() - pd.Timedelta(days=45)
+            dead_stock = df_sourcing[df_sourcing['Date of Purchase'] < cutoff]
+            amt_clean = dead_stock.get('Total Amount', pd.Series(dtype=str)).astype(str).str.replace(',', '')
+            dead_stock_capital = pd.to_numeric(amt_clean, errors='coerce').fillna(0).sum()
+        except:
             pass
             
     return total_sales, true_profit, top_performer, dead_stock_capital
 
 
 def engine_cac_mom_growth(df_sales, weekly_marketing_spend):
-    paid_mask = df_sales.get('Payment Status', pd.Series(dtype=str)).astype(str).str.contains('paid', case=False, na=False)
-    df_paid = df_sales[paid_mask].copy()
+    mask = df_sales.get('Payment Status', pd.Series(dtype=str)).astype(str).str.contains('paid', case=False, na=False)
+    df_paid = df_sales[mask].copy()
     
-    if df_paid.empty:
-        return 0.0, 0, 0.0
+    if df_paid.empty: return 0.0, 0, 0.0
 
     if 'Date of Sale' in df_paid.columns:
         df_paid['Date of Sale'] = pd.to_datetime(df_paid['Date of Sale'], format='mixed', errors='coerce')
@@ -118,7 +113,8 @@ def engine_cac_mom_growth(df_sales, weekly_marketing_spend):
     mom_growth = 0.0
     if 'Date of Sale' in df_paid.columns and pd.api.types.is_datetime64_any_dtype(df_paid['Date of Sale']):
         df_paid['Month'] = df_paid['Date of Sale'].dt.to_period('M')
-        monthly_rev = pd.to_numeric(df_paid['Total Amount Client Paid You'], errors='coerce').groupby(df_paid['Month']).sum()
+        rev_clean = df_paid.get('Total Amount Client Paid You', pd.Series(dtype=str)).astype(str).str.replace(',', '')
+        monthly_rev = pd.to_numeric(rev_clean, errors='coerce').groupby(df_paid['Month']).sum()
         if len(monthly_rev) >= 2:
             mom_growth = monthly_rev.pct_change().iloc[-1] * 100.0
             
@@ -126,13 +122,11 @@ def engine_cac_mom_growth(df_sales, weekly_marketing_spend):
 
 
 def generate_financial_charts(df_sales):
-    if df_sales.empty or 'Payment Status' not in df_sales.columns:
-        return None, None
+    if df_sales.empty or 'Payment Status' not in df_sales.columns: return None, None
         
-    paid_mask = df_sales['Payment Status'].astype(str).str.contains('paid', case=False, na=False)
-    df_paid = df_sales[paid_mask].copy()
-    if df_paid.empty:
-        return None, None
+    mask = df_sales['Payment Status'].astype(str).str.contains('paid', case=False, na=False)
+    df_paid = df_sales[mask].copy()
+    if df_paid.empty: return None, None
 
     if 'Date of Sale' in df_paid.columns:
         df_paid['Date of Sale'] = pd.to_datetime(df_paid['Date of Sale'], format='mixed', errors='coerce')
@@ -141,9 +135,14 @@ def generate_financial_charts(df_sales):
     else:
         df_trend = df_paid.copy()
 
-    df_trend['Rev'] = pd.to_numeric(df_trend['Total Amount Client Paid You'], errors='coerce').fillna(0)
-    df_trend['Cost'] = pd.to_numeric(df_trend['Total Cost of These Items'], errors='coerce').fillna(0)
-    df_trend['Cour'] = pd.to_numeric(df_trend.get('Courier Charge You Paid', 0), errors='coerce').fillna(0)
+    # 🚀 STRIP COMMAS TO FIX THE TREND CHART Y-AXIS BUG
+    rev_c = df_trend.get('Total Amount Client Paid You', pd.Series(dtype=str)).astype(str).str.replace(',', '')
+    cost_c = df_trend.get('Total Cost of These Items', pd.Series(dtype=str)).astype(str).str.replace(',', '')
+    cour_c = df_trend.get('Courier Charge You Paid', pd.Series(dtype=str)).astype(str).str.replace(',', '')
+
+    df_trend['Rev'] = pd.to_numeric(rev_c, errors='coerce').fillna(0)
+    df_trend['Cost'] = pd.to_numeric(cost_c, errors='coerce').fillna(0)
+    df_trend['Cour'] = pd.to_numeric(cour_c, errors='coerce').fillna(0)
     df_trend['True Profit'] = df_trend['Rev'] - (df_trend['Cost'] + df_trend['Cour'])
 
     df_grouped = df_trend.groupby(df_trend['Date of Sale'].dt.date).agg(
@@ -156,17 +155,12 @@ def generate_financial_charts(df_sales):
     fig_trend.add_trace(go.Scatter(x=df_grouped['Date of Sale'], y=df_grouped['True_Profit'], mode='lines+markers', name='True Net Profit', line=dict(color='#2E7D32', width=3)))
     fig_trend.update_layout(title="📈 Revenue vs. Net Profit Trends", hovermode="x unified", margin=dict(l=20, r=20, t=50, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
 
+    # 🚀 DONUT CHART GENERATION
     fig_donut = None
-    items_df = get_clean_items_df(df_sales)
+    items_df = extract_cart_data(df_sales)
     
     if not items_df.empty:
-        # 1. Group the data
-        category_sales = items_df.groupby('Display_Category')['Quantity'].sum().reset_index()  
-        
-        # 2. FORCE STRICT FLOAT CASTING RIGHT BEFORE PLOTLY
-        category_sales['Quantity'] = pd.to_numeric(category_sales['Quantity'], errors='coerce').fillna(1).astype(float)
-        
-        # 3. Render the chart
+        category_sales = items_df.groupby('Display_Category')['Quantity'].sum().reset_index()            
         fig_donut = px.pie(category_sales, values='Quantity', names='Display_Category', hole=0.45)
         fig_donut.update_layout(title="Sales Distribution by Category", margin=dict(t=40, b=10, l=10, r=10))
 
