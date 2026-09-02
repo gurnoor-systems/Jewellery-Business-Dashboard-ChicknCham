@@ -4,19 +4,18 @@ import plotly.graph_objects as go
 import plotly.express as px
 
 def extract_cart_data(df_sales):
-    """Extracts and standardizes cart data, enforcing strict column schemas (Data Contracts)."""
+    """Extracts cart data, enforcing strict column schemas (Data Contracts)."""
     mask = df_sales.get('Payment Status', pd.Series(dtype=str)).astype(str).str.contains('paid', case=False, na=False)
     df_paid = df_sales[mask].copy()
     
     # THE DATA CONTRACT: Define the exact schema guaranteed to be returned
     schema_columns = ['Category', 'Display_Category', 'Quantity']
-    empty_df = pd.DataFrame(columns=schema_columns)
     
     if df_paid.empty or 'Line_Items_JSON' not in df_paid.columns:
-        return empty_df
+        return pd.DataFrame(columns=schema_columns)
 
     all_items = []
-    for idx, row_val in df_paid['Line_Items_JSON'].items():
+    for _, row_val in df_paid['Line_Items_JSON'].items():
         if pd.isna(row_val): continue
         val_str = str(row_val).strip()
         if not val_str: continue
@@ -41,6 +40,7 @@ def extract_cart_data(df_sales):
                 if cat == 'Other' and det and det.lower() != 'nan':
                     disp_cat = f"Other: {det[:15]}"
                     
+                # Force absolute float math on extraction
                 raw_qty = item.get('Quantity', item.get('Qty', 1))
                 try:
                     qty = float(raw_qty)
@@ -54,7 +54,7 @@ def extract_cart_data(df_sales):
                 })
 
     if not all_items: 
-        return empty_df
+        return pd.DataFrame(columns=schema_columns)
 
     # FORCE PANDAS TO ACKNOWLEDGE THE EXACT COLUMNS
     return pd.DataFrame(all_items, columns=schema_columns)
@@ -74,16 +74,15 @@ def engine_cost_profitability(df_sales, df_sourcing):
         cost_clean = paid_df.get('Total Cost of These Items', pd.Series(dtype=str)).astype(str).str.replace(',', '')
         cour_clean = paid_df.get('Courier Charge You Paid', pd.Series(dtype=str)).astype(str).str.replace(',', '')
 
-        revenue = pd.to_numeric(rev_clean, errors='coerce').fillna(0)
-        cost = pd.to_numeric(cost_clean, errors='coerce').fillna(0)
-        courier = pd.to_numeric(cour_clean, errors='coerce').fillna(0)
+        revenue = pd.to_numeric(rev_clean, errors='coerce').fillna(0).astype(float)
+        cost = pd.to_numeric(cost_clean, errors='coerce').fillna(0).astype(float)
+        courier = pd.to_numeric(cour_clean, errors='coerce').fillna(0).astype(float)
         
         total_sales = revenue.sum()
         true_profit = (revenue - cost - courier).sum()
             
     items_df = extract_cart_data(df_sales)
     
-    # CHECK: Verify column physically exists before grouping
     if not items_df.empty and 'Category' in items_df.columns:
         category_totals = items_df.groupby('Category')['Quantity'].sum()
         if not category_totals.empty:
@@ -143,19 +142,24 @@ def generate_financial_charts(df_sales):
     else:
         df_trend = df_paid.copy()
 
+    # STRIP COMMAS & FORCE FLOATS TO KILL THE Y-AXIS BUG
     rev_c = df_trend.get('Total Amount Client Paid You', pd.Series(dtype=str)).astype(str).str.replace(',', '')
     cost_c = df_trend.get('Total Cost of These Items', pd.Series(dtype=str)).astype(str).str.replace(',', '')
     cour_c = df_trend.get('Courier Charge You Paid', pd.Series(dtype=str)).astype(str).str.replace(',', '')
 
-    df_trend['Rev'] = pd.to_numeric(rev_c, errors='coerce').fillna(0)
-    df_trend['Cost'] = pd.to_numeric(cost_c, errors='coerce').fillna(0)
-    df_trend['Cour'] = pd.to_numeric(cour_c, errors='coerce').fillna(0)
+    df_trend['Rev'] = pd.to_numeric(rev_c, errors='coerce').fillna(0).astype(float)
+    df_trend['Cost'] = pd.to_numeric(cost_c, errors='coerce').fillna(0).astype(float)
+    df_trend['Cour'] = pd.to_numeric(cour_c, errors='coerce').fillna(0).astype(float)
     df_trend['True Profit'] = df_trend['Rev'] - (df_trend['Cost'] + df_trend['Cour'])
 
     df_grouped = df_trend.groupby(df_trend['Date of Sale'].dt.date).agg(
         Gross_Revenue=('Rev', 'sum'),
         True_Profit=('True Profit', 'sum')
     ).reset_index()
+
+    # DOUBLE CONFIRMATION FLOATS FOR PLOTLY
+    df_grouped['Gross_Revenue'] = df_grouped['Gross_Revenue'].astype(float)
+    df_grouped['True_Profit'] = df_grouped['True_Profit'].astype(float)
 
     fig_trend = go.Figure()
     fig_trend.add_trace(go.Scatter(x=df_grouped['Date of Sale'], y=df_grouped['Gross_Revenue'], mode='lines+markers', name='Gross Revenue', line=dict(color='#800000', width=3)))
@@ -165,9 +169,12 @@ def generate_financial_charts(df_sales):
     fig_donut = None
     items_df = extract_cart_data(df_sales)
     
-    # CHECK: Verify column physically exists before grouping
     if not items_df.empty and 'Display_Category' in items_df.columns:
-        category_sales = items_df.groupby('Display_Category')['Quantity'].sum().reset_index()            
+        category_sales = items_df.groupby('Display_Category')['Quantity'].sum().reset_index()   
+        
+        # FINAL MATH CAST FOR DONUT CHART         
+        category_sales['Quantity'] = category_sales['Quantity'].astype(float)
+        
         fig_donut = px.pie(category_sales, values='Quantity', names='Display_Category', hole=0.45)
         fig_donut.update_layout(title="Sales Distribution by Category", margin=dict(t=40, b=10, l=10, r=10))
 
