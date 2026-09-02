@@ -150,11 +150,7 @@ def main():
     try:
         with st.spinner("Syncing secure database.."):
             df_sales, df_sourcing = load_data()
-
-            st.warning("X-RAY VISION ACTIVE:")
-            st.write("Columns found:", df_sales.columns.tolist())
-            st.dataframe(df_sales[['Client Formal Name', 'Payment Status', 'Total Amount Client Paid You', 'Line_Items_JSON']].tail(5))
-            
+                        
         tab1, tab2, tab4, tab5, tab6, tab7, tab3 = st.tabs([
             "📊 Profitability Dashboard", 
             "👑 Loyalty Dashboard", 
@@ -523,7 +519,7 @@ def main():
 
             vault_df = load_sourcing_vault()
             if not vault_df.empty:
-                # 🚀 MOBILE UPGRADE: Category & Soft Archival Filters
+                # MOBILE UPGRADE: Category & Soft Archival Filters
                 col_filt1, col_filt2 = st.columns([1.5, 1])
                 with col_filt1:
                     filter_cat = st.selectbox(
@@ -635,7 +631,7 @@ def main():
                     live_bytes = None
 
 
-                # 🚀 MOBILE UPGRADE: Form blocks partial-word search freezing
+                # MOBILE UPGRADE: Form blocks partial-word search freezing
                 with st.form("manual_search_form"):
                     manual_search = st.text_input(
                         "🔍 Manual Search Fallback",
