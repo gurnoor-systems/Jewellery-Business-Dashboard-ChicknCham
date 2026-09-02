@@ -133,7 +133,7 @@ def check_password():
 # ==========================================
 
 def main():
-    st.title("💎 Chik n Cham by laddi")
+    st.title("💎 Chik n Cham by laddi (V2 LIVE)")
     st.markdown("### Current Operations")
 
     with st.sidebar:
