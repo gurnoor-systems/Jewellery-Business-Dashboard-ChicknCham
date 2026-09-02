@@ -51,6 +51,7 @@ def extract_cart_data(df_sales):
                     
                 # Append the clean data
                 all_items.append({
+                    'Category': cat,
                     'Display_Category': disp_cat,
                     'Quantity': qty
                 })
