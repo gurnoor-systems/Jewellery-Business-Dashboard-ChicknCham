@@ -4,14 +4,16 @@ import plotly.graph_objects as go
 import plotly.express as px
 
 def extract_cart_data(df_sales):
-    """
-    Extracts and standardizes cart data, bypassing Pandas schema alignment bugs.
-    """
+    """Extracts and standardizes cart data, enforcing strict column schemas (Data Contracts)."""
     mask = df_sales.get('Payment Status', pd.Series(dtype=str)).astype(str).str.contains('paid', case=False, na=False)
     df_paid = df_sales[mask].copy()
     
+    # THE DATA CONTRACT: Define the exact schema guaranteed to be returned
+    schema_columns = ['Category', 'Display_Category', 'Quantity']
+    empty_df = pd.DataFrame(columns=schema_columns)
+    
     if df_paid.empty or 'Line_Items_JSON' not in df_paid.columns:
-        return pd.DataFrame()
+        return empty_df
 
     all_items = []
     for idx, row_val in df_paid['Line_Items_JSON'].items():
@@ -19,7 +21,6 @@ def extract_cart_data(df_sales):
         val_str = str(row_val).strip()
         if not val_str: continue
 
-        # 1. Robust Parsing
         try:
             parsed = json.loads(val_str)
         except Exception:
@@ -31,10 +32,8 @@ def extract_cart_data(df_sales):
         if isinstance(parsed, dict):
             parsed = [parsed]
             
-        # 2. Strict Pre-Processing (The Fix)
         if isinstance(parsed, list):
             for item in parsed:
-                # Standardize categories
                 cat = str(item.get('Category', 'Unknown')).strip().title()
                 det = str(item.get('Custom Details', '')).strip().title()
                 
@@ -42,14 +41,12 @@ def extract_cart_data(df_sales):
                 if cat == 'Other' and det and det.lower() != 'nan':
                     disp_cat = f"Other: {det[:15]}"
                     
-                # Force float math on extraction
                 raw_qty = item.get('Quantity', item.get('Qty', 1))
                 try:
                     qty = float(raw_qty)
                 except ValueError:
                     qty = 1.0
                     
-                # Append the clean data
                 all_items.append({
                     'Category': cat,
                     'Display_Category': disp_cat,
@@ -57,10 +54,11 @@ def extract_cart_data(df_sales):
                 })
 
     if not all_items: 
-        return pd.DataFrame()
+        return empty_df
 
-    # 3. Return a dataframe ready for math
-    return pd.DataFrame(all_items)
+    # FORCE PANDAS TO ACKNOWLEDGE THE EXACT COLUMNS
+    return pd.DataFrame(all_items, columns=schema_columns)
+
 
 def engine_cost_profitability(df_sales, df_sourcing):
     total_sales = 0.0
@@ -72,7 +70,6 @@ def engine_cost_profitability(df_sales, df_sourcing):
         mask = df_sales['Payment Status'].astype(str).str.contains('paid', case=False, na=False)
         paid_df = df_sales[mask]
         
-        # STRIP COMMAS TO PREVENT MATH FAILURES
         rev_clean = paid_df.get('Total Amount Client Paid You', pd.Series(dtype=str)).astype(str).str.replace(',', '')
         cost_clean = paid_df.get('Total Cost of These Items', pd.Series(dtype=str)).astype(str).str.replace(',', '')
         cour_clean = paid_df.get('Courier Charge You Paid', pd.Series(dtype=str)).astype(str).str.replace(',', '')
@@ -85,7 +82,9 @@ def engine_cost_profitability(df_sales, df_sourcing):
         true_profit = (revenue - cost - courier).sum()
             
     items_df = extract_cart_data(df_sales)
-    if not items_df.empty:
+    
+    # CHECK: Verify column physically exists before grouping
+    if not items_df.empty and 'Category' in items_df.columns:
         category_totals = items_df.groupby('Category')['Quantity'].sum()
         if not category_totals.empty:
             top_performer = str(category_totals.idxmax())
@@ -101,6 +100,7 @@ def engine_cost_profitability(df_sales, df_sourcing):
             pass
             
     return total_sales, true_profit, top_performer, dead_stock_capital
+
 
 def engine_cac_mom_growth(df_sales, weekly_marketing_spend):
     mask = df_sales.get('Payment Status', pd.Series(dtype=str)).astype(str).str.contains('paid', case=False, na=False)
@@ -143,7 +143,6 @@ def generate_financial_charts(df_sales):
     else:
         df_trend = df_paid.copy()
 
-    # STRIP COMMAS TO PREVENT MATH FAILURES
     rev_c = df_trend.get('Total Amount Client Paid You', pd.Series(dtype=str)).astype(str).str.replace(',', '')
     cost_c = df_trend.get('Total Cost of These Items', pd.Series(dtype=str)).astype(str).str.replace(',', '')
     cour_c = df_trend.get('Courier Charge You Paid', pd.Series(dtype=str)).astype(str).str.replace(',', '')
@@ -163,11 +162,11 @@ def generate_financial_charts(df_sales):
     fig_trend.add_trace(go.Scatter(x=df_grouped['Date of Sale'], y=df_grouped['True_Profit'], mode='lines+markers', name='True Net Profit', line=dict(color='#2E7D32', width=3)))
     fig_trend.update_layout(title="📈 Revenue vs. Net Profit Trends", hovermode="x unified", margin=dict(l=20, r=20, t=50, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
 
-    # DONUT CHART GENERATION
     fig_donut = None
     items_df = extract_cart_data(df_sales)
     
-    if not items_df.empty:
+    # CHECK: Verify column physically exists before grouping
+    if not items_df.empty and 'Display_Category' in items_df.columns:
         category_sales = items_df.groupby('Display_Category')['Quantity'].sum().reset_index()            
         fig_donut = px.pie(category_sales, values='Quantity', names='Display_Category', hole=0.45)
         fig_donut.update_layout(title="Sales Distribution by Category", margin=dict(t=40, b=10, l=10, r=10))
