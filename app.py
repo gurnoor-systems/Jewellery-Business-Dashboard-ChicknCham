@@ -21,7 +21,7 @@ from data.sales import log_new_sale, load_sales_data
 
 # Engine Imports
 
-from engines.financials import engine_cost_profitability, generate_financial_charts, engine_cac_mom_growth
+from engines.financials import extract_cart_data, engine_cost_profitability, generate_financial_charts, engine_cac_mom_growth
 from engines.crm import engine_vip_loyalty
 from engines.invoicing import generate_invoice_pdf
 from engines.marketing import generate_instagram_captions, auto_tag_jewelry
