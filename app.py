@@ -156,7 +156,7 @@ def main():
             "🛒 Log Jewelery",
             "🔴 Jewelery info!",
             "🛒 Log a Sale",
-            "🧾 Invoice"
+            "🧾 Invoice",
             "🛠️ Recent Transactions"
         ])
 
