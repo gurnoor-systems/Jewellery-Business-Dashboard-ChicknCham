@@ -11,7 +11,7 @@ genai.configure(api_key=st.secrets["gemini"]["api_key"])
 
 # Data Imports
 
-from data.ingestion import load_data
+from data.repository import BusinessRepository
 
 # views Imports
 
@@ -22,6 +22,7 @@ from views.catalog import render_catalog
 from views.live_assistant import render_live_assistant 
 from views.pos import render_pos
 from views.invoice import render_invoice
+from views.corrections import render_corrections
 
 # SKU Unique Identifier Generator
 
@@ -145,9 +146,10 @@ def main():
         
     try:
         with st.spinner("Syncing secure database.."):
-            df_sales, df_sourcing = load_data()
+            df_sales = BusinessRepository.get_sales_data()
+            df_sourcing = BusinessRepository.get_sourcing_data()
                         
-        tab1, tab2, tab4, tab5, tab6, tab7, tab3 = st.tabs([
+        tab1, tab2, tab4, tab5, tab6, tab7, tab3, tab8 = st.tabs([
             "📊 Profitability Dashboard", 
             "👑 Loyalty Dashboard", 
             "🎨 Content Generator",
@@ -155,6 +157,7 @@ def main():
             "🔴 Jewelery info!",
             "🛒 Log a Sale",
             "🧾 Invoice"
+            "🛠️ Recent Transactions"
         ])
 
         with tab1:
@@ -177,6 +180,9 @@ def main():
 
         with tab7:
             render_pos()
+    
+        with tab8:
+            render_corrections()
 
     except Exception as e:
 

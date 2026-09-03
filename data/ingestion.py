@@ -36,14 +36,33 @@ def load_data():
     # Use the new robust fetcher
     df_sales = fetch_with_retry("Sales_Engine")
     df_sourcing = fetch_with_retry("Sourcing_Vault")
-    
+        
     if not df_sales.empty:
         df_sales.columns = df_sales.columns.str.strip()
         
+        # 1. DECRYPT
         if 'Client Formal Name' in df_sales.columns:
             df_sales['Client Formal Name'] = df_sales['Client Formal Name'].apply(decrypt_pii)
+            
         if 'Instagram/Facebook Handle' in df_sales.columns:
             df_sales['Instagram/Facebook Handle'] = df_sales['Instagram/Facebook Handle'].apply(decrypt_pii)
+            
+        # 2. NORMALIZATION
+        if 'Instagram/Facebook Handle' in df_sales.columns:
+            df_sales['Instagram/Facebook Handle'] = (
+                df_sales['Instagram/Facebook Handle']
+                .astype(str)
+                .str.strip()
+                .str.title()
+            )
+            
+        if 'Client Formal Name' in df_sales.columns:
+            df_sales['Client Formal Name'] = (
+                df_sales['Client Formal Name']
+                .astype(str)
+                .str.strip()
+                .str.title()
+            )
             
         if 'Date of Sale' in df_sales.columns:
             df_sales['Date of Sale'] = pd.to_datetime(df_sales['Date of Sale'], errors='coerce')
