@@ -173,7 +173,7 @@ def main():
             render_catalog()
 
         with tab6:
-            render_live_assistant(df_sourcing)
+            render_live_assistant()
 
         with tab7:
             render_pos()
