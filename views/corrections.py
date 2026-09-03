@@ -3,30 +3,31 @@ from data.repository import BusinessRepository
 
 def render_corrections():
     st.subheader("🛠️ Recent Transactions")
-    st.markdown("Select the transaction to safely correct amounts, names, or payment statuses.")
+    st.markdown("Select the transaction to correct amounts, names, or payment statuses.")
 
     df_sales = BusinessRepository.get_sales_data()
 
     if not df_sales.empty and 'Order_ID' in df_sales.columns:
         # Filter out rows with blank Order IDs
-        valid_orders = df_sales[df_sales['Order_ID'].astype(str).str.strip() != ""]
+        valid_orders = df_sales[df_sales['Order_ID'].astype(str).str.strip() != ""].copy()
 
         if not valid_orders.empty:
-            # Sort by most recent first
-            valid_orders = valid_orders.iloc[::-1].copy()
+
+            target_orders = valid_orders.tail(10).iloc[::-1].copy()
+            st.caption("⚡ Showing the 10 most recent transactions for quick editing.")
 
             # Create a clean display string for selection
-            valid_orders['Display'] = (
-                valid_orders['Order_ID'].astype(str) + " - " + 
-                valid_orders['Client Formal Name'].astype(str) + " (₹" + 
-                valid_orders['Total Amount Client Paid You'].astype(str) + ")"
+            target_orders['Display'] = (
+                target_orders['Order_ID'].astype(str) + " - " + 
+                target_orders['Client Formal Name'].astype(str) + " (₹" + 
+                target_orders['Total Amount Client Paid You'].astype(str) + ")"
             )
 
-            selected_display = st.selectbox("Select Order to Correct", options=valid_orders['Display'].tolist())
+            selected_display = st.selectbox("Select Order to Correct", options=target_orders['Display'].tolist())
 
             if selected_display:
                 # Extract the exact row based on selection
-                selected_row = valid_orders[valid_orders['Display'] == selected_display].iloc[0]
+                selected_row = target_orders[target_orders['Display'] == selected_display].iloc[0]
                 order_id = str(selected_row['Order_ID'])
 
                 with st.form(key=f"edit_form_{order_id}"):
@@ -58,7 +59,7 @@ def render_corrections():
                             result = BusinessRepository.update_transaction(order_id, new_amount, new_status, new_client_name)
                             if result is True:
                                 st.toast("✅ Transaction successfully updated!", icon="🎉")
-                                st.cache_data.clear() # Clear cache to fetch updated sheet data instantly
+                                st.cache_data.clear() 
                                 st.rerun()
                             else:
                                 st.error(f"⚠️ Failed to update database: {result}")
