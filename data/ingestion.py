@@ -10,7 +10,13 @@ def init_connection():
     """Authenticates and caches the ENTIRE workbook to save API calls."""
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
-    return gspread.authorize(creds).open("Jewelry Business DB")
+    client = gspread.authorize(creds)
+    
+    sheet_id = st.secrets.get("spreadsheet_id") or st.secrets.get("gcp_service_account", {}).get("spreadsheet_id")
+    if sheet_id:
+        return client.open_by_key(sheet_id)
+        
+    return client.open("Jewelry Business DB")
 
 def fetch_with_retry(worksheet_name, max_retries=3):
     """Fetches data from Google Sheets with Exponential Backoff for 503/429 errors."""
@@ -23,7 +29,7 @@ def fetch_with_retry(worksheet_name, max_retries=3):
                 if attempt < max_retries - 1:
                     time.sleep(2 ** attempt)  # Waits 1s, then 2s, then 4s
                     continue
-            raise e # If it's a different error, or we run out of retries, crash gracefully
+            raise e
 
 @st.cache_data(ttl=600) 
 def load_data():
