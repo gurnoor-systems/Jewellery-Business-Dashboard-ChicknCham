@@ -6,8 +6,9 @@ import logging
 
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Global AI Config
-genai.configure(api_key=st.secrets["gemini"]["api_key"])
+# Global AI Config (New SDK syntax)
+if 'ai_client' not in st.session_state:
+    st.session_state.ai_client = genai.Client(api_key=st.secrets["gemini"]["api_key"])
 
 # Data Imports
 
