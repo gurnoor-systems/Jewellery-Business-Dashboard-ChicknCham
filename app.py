@@ -143,7 +143,35 @@ def main():
             value=0.0,
             help="Enter any amount. Type directly or use arrows."
         )
-        
+
+        st.divider()
+
+        # ==========================================
+        # 🛡️ CLIENT SAFETY NET: Instant Data Backup
+        # ==========================================
+        st.subheader("💾 Backup Your Records")
+        st.caption("Download a complete, offline copy of all recorded sales anytime.")
+
+        # Ensure we have data to export
+        try:
+            df_export = BusinessRepository.get_sales_data()
+            if not df_export.empty:
+                # Convert DataFrame to clean CSV format in memory
+                csv_data = df_export.to_csv(index=False).encode('utf-8')
+                
+                st.download_button(
+                    label="📥 Download Sales Backup (.csv)",
+                    data=csv_data,
+                    file_name="Sales_Backup_Records.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                    help="Click to download your entire transaction history to your device."
+                )
+            else:
+                st.info("No records available to export yet.")
+        except Exception:
+            st.caption("⚠️ Backup unavailable while offline.")
+
     try:
         with st.spinner("Syncing secure database.."):
             df_sales = BusinessRepository.get_sales_data()
