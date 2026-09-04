@@ -1,4 +1,4 @@
-import google.generativeai as genai
+from google import genai
 import streamlit as st
 import logging
 
@@ -9,6 +9,9 @@ def generate_instagram_captions(price, image=None, product_name=None, features=N
     Returns: (generated_text, error_message)
     """
     try:
+        # Fetch the initialized client from app.py
+        client = st.session_state.ai_client
+        
         if image:
             # --- 1. VISION MODE LOGIC ---
             prompt = f"""
@@ -31,8 +34,11 @@ def generate_instagram_captions(price, image=None, product_name=None, features=N
             provide the output in a copy-paste ready format, with no extra commentary or explanations.
             worth noting that the captions should be unique and not generic, and should reflect the brand's identity and style.
             """
-            model = genai.GenerativeModel('gemini-3.1-flash-lite')
-            response = model.generate_content([prompt, image])
+            
+            response = client.models.generate_content(
+                model='gemini-3.1-flash-lite',
+                contents=[prompt, image]
+            )
             return response.text, None
         
         else:
@@ -53,18 +59,16 @@ def generate_instagram_captions(price, image=None, product_name=None, features=N
             - Include a strong Call to Action (CTA) telling customers to DM to order.
         
             Format the output clearly with headers: Option 1, Option 2, and Option 3.
-            Output primarily in simple plain English, but include a few Hindi words or phrases to appeal to the local audience in atleast 1 option.
-            Also the output is to be highly engaging, considering primary shoppers as women aged 18-55 in India, who are looking for affordable yet stylish artificial jewelry with great lasting quality.
-            Customers are majorly from, india but also from Us, Canada, UK, Australia, and Germany. So the captions should be globally appealing but with a strong Indian cultural touch.
             """
-            model = genai.GenerativeModel('gemini-3.1-flash-lite')
-            response = model.generate_content(prompt)
+            
+            response = client.models.generate_content(
+                model='gemini-3.1-flash-lite',
+                contents=prompt
+            )
             return response.text, None
 
     except Exception as e:
-        # Backend logging
         logging.error(f"Marketing API Failure: {e}", exc_info=True)
-        # Return the error to be displayed by the UI
         return None, str(e)
 
 # ------------------------------------------------------------------
@@ -75,7 +79,8 @@ def auto_tag_jewelry(image):
     Returns: (category_string, tags_string)
     """
     try:
-        # A highly restrictive prompt forces the AI to be fast and deterministic
+        client = st.session_state.ai_client
+        
         prompt = """
         Analyze this jewelry piece. You must respond in exactly this format with no other text:
         Category: [Category] | Tags: [Tags]
@@ -84,9 +89,10 @@ def auto_tag_jewelry(image):
         Tags: 3-4 comma-separated visual features (e.g., gold plated, mint green, pearl drops).
         """
         
-        # Using the absolute fastest multimodal model available
-        model = genai.GenerativeModel('gemini-3.1-flash-lite')
-        response = model.generate_content([prompt, image])
+        response = client.models.generate_content(
+            model='gemini-3.1-flash-lite',
+            contents=[prompt, image]
+        )
         
         text = response.text.strip()
         
@@ -94,7 +100,6 @@ def auto_tag_jewelry(image):
         final_category = "Other"
         final_tags = ""
         
-        # Parse the strict format
         if "|" in text:
             parts = text.split("|")
             cat_part = parts[0].replace("Category:", "").strip()

@@ -1,5 +1,5 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
 from PIL import Image
 import io
 
@@ -8,10 +8,8 @@ def analyze_live_item(image_bytes):
     Uses Gemini Vision to instantly extract search tags from a live photo.
     """
     try:
-        genai.configure(api_key=st.secrets["gemini"]["api_key"])
-        
-        # Using the fast Flash Lite model to ensure zero lag during live streams
-        model = genai.GenerativeModel('gemini-3.1-flash-lite')
+        # Fetch the initialized client from app.py
+        client = st.session_state.ai_client
         
         img = Image.open(io.BytesIO(image_bytes))
         
@@ -21,7 +19,10 @@ def analyze_live_item(image_bytes):
         Return ONLY a comma-separated list of these 3 keywords in lowercase.
         """
         
-        response = model.generate_content([prompt, img])
+        response = client.models.generate_content(
+            model='gemini-3.1-flash-lite',
+            contents=[prompt, img]
+        )
         return response.text.strip()
         
     except Exception as e:

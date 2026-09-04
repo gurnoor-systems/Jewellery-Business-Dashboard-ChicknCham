@@ -1,7 +1,7 @@
 import time
 import streamlit as st
 import hashlib
-import google.generativeai as genai
+from google import genai
 import logging
 
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
