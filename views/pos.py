@@ -38,14 +38,19 @@ def render_pos():
         st.markdown("##### 👤 Client Information")
         
         # Helper Dropdown for existing clients
-        known_clients = ["➕ Enter New Client"] + list(client_history.keys())
-        selected_client_display = st.selectbox("Search Past Clients here", options=known_clients)
+        known_clients = list(client_history.keys())
+        selected_client_display = st.selectbox(
+            "Search Past Clients here", 
+            options=known_clients, 
+            index=None, 
+            placeholder="🔍 Type to search past clients..."
+            )
         
         # Auto-fill logic
         auto_handle = ""
         auto_name = ""
         
-        if selected_client_display != "➕ Enter New Client":
+        if selected_client_display:
             auto_handle = client_history[selected_client_display]
             
             past_records = df_sales[df_sales['Instagram/Facebook Handle'] == auto_handle]
@@ -59,9 +64,20 @@ def render_pos():
         c1, c2 = st.columns(2)
         
         with c1:
-            formal_name = st.text_input("Formal Name (For Invoice)", value=auto_name, placeholder="e.g., Priya Sharma", key="pos_name")
+            formal_name = st.text_input(
+                "Formal Name (For Invoice)", 
+                value=auto_name, 
+                placeholder="e.g., Priya Sharma", 
+                key="pos_name"
+                )
+            
         with c2:
-            social_handle = st.text_input("Instagram / Social Handle", value=auto_handle, placeholder="e.g., @priya_styles", key="pos_handle")
+            social_handle = st.text_input(
+            "Instagram / Social Handle",
+             value=auto_handle,
+             placeholder="e.g., @priya_styles",
+             key="pos_handle"
+            )
     
     st.divider()
     
