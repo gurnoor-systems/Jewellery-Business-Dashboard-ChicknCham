@@ -1,23 +1,67 @@
 import streamlit as st
 import pandas as pd
 from data.sales import log_new_sale
+from data.repository import BusinessRepository
+
+# VIP Threshold Configuration
+VIP_THRESHOLD = 3
 
 def render_pos():
     st.subheader("🛒 Point of Sale (POS)")
-    st.caption("Log transactions securely. Line items will automatically sync to analytics and invoicing.")
+    st.caption("Process new sales and log jewelry dispatch.")
     
     # Initialize Cart in Session State
     if 'pos_cart' not in st.session_state:
         st.session_state.pos_cart = []
+        
+    # Fetch data for VIP tracking and auto-fill
+    df_sales = BusinessRepository.get_sales_data()
+    client_history = {}
+    
+    if not df_sales.empty and 'Instagram/Facebook Handle' in df_sales.columns:
+        # Count lifetime orders per handle
+        order_counts = df_sales['Instagram/Facebook Handle'].value_counts().to_dict()
+        
+        for handle, count in order_counts.items():
+            if pd.isna(handle) or str(handle).strip() == "":
+                continue
+            
+            # Apply VIP badge for top buyers
+            if count >= VIP_THRESHOLD:
+                display_name = f"👑 {handle} (VIP: {count} Orders)"
+            else:
+                display_name = f"👤 {handle} ({count} Orders)"
+                
+            client_history[display_name] = handle
     
     with st.container(border=True):
         st.markdown("##### 👤 Client Information")
+        
+        # Helper Dropdown for existing clients
+        known_clients = ["➕ Enter New Client"] + list(client_history.keys())
+        selected_client_display = st.selectbox("Search Past Clients here", options=known_clients)
+        
+        # Auto-fill logic
+        auto_handle = ""
+        auto_name = ""
+        
+        if selected_client_display != "➕ Enter New Client":
+            auto_handle = client_history[selected_client_display]
+            
+            past_records = df_sales[df_sales['Instagram/Facebook Handle'] == auto_handle]
+            if not past_records.empty and 'Client Formal Name' in past_records.columns:
+                auto_name = str(past_records.iloc[0]['Client Formal Name'])
+                
+            # Trigger the VIP alert!
+            if "👑" in selected_client_display:
+                st.success(f"🌟 **VIP Customer Alert!** They have placed {selected_client_display.split('(')[1].replace(')', '')}. Consider adding a free gift!")
+
         c1, c2 = st.columns(2)
         
         with c1:
-            formal_name = st.text_input("Formal Name (For Invoice)", placeholder="e.g., Priya Sharma", key="pos_name")
+            formal_name = st.text_input("Formal Name (For Invoice)", value=auto_name, placeholder="e.g., Priya Sharma", key="pos_name")
         with c2:
-            social_handle = st.text_input("Instagram / Social Handle", placeholder="e.g., @priya_styles", key="pos_handle")
+            social_handle = st.text_input("Instagram / Social Handle", value=auto_handle, placeholder="e.g., @priya_styles", key="pos_handle")
     
     st.divider()
     
@@ -124,8 +168,9 @@ def render_pos():
                 )
             
                 if success:
-                    st.success(f"✅ Transaction logged for {formal_name}! Total Pieces: {calc_pieces}")
-                    # Clear the cart memory instantly
+                    st.success(f"✅ Sale logged successfully!", icon="🎉")
+                    st.info(f"Transaction logged for {formal_name}! Total Pieces: {calc_pieces}")
+                    # Clear the cart memory.
                     st.session_state.pos_cart = []
                     st.cache_data.clear()
                     st.rerun()
