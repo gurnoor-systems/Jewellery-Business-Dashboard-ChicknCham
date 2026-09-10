@@ -7,33 +7,18 @@ class BusinessRepository:
     
     @staticmethod
     def get_sales_data() -> pd.DataFrame:
-        """Reads sales data from Neon PostgreSQL."""
+        """Reads all past sales and transactions from Neon PostgreSQL."""
         try:
             conn = st.connection("postgresql", type="sql")
             
-            # Map SQL columns to exact Google Sheets headers so frontend views do not break
-            query = """
-                SELECT 
-                    id AS "Order_ID",
-                    created_at AS "Date",
-                    formal_name AS "Client Formal Name",
-                    handle AS "Instagram/Facebook Handle",
-                    total_pieces AS "Total Pieces",
-                    total_cost AS "Total Sourcing Cost",
-                    courier_charge AS "Courier Charge",
-                    amount_paid AS "Total Amount Client Paid You",
-                    payment_status AS "Payment Status",
-                    line_items AS "Line Items"
-                FROM sales 
-                ORDER BY id DESC;
-            """
+            # Pandas safely handles the spaces in the column names when fetching *
+            query = "SELECT * FROM sales_ledger ORDER BY \"Order_ID\" ASC;"
             
-            # ttl=0 ensures the POS system fetches real-time data on every refresh
             df = conn.query(query, ttl=0)
             return df
             
         except Exception as e:
-            st.error(f"Database Read Error: {e}")
+            st.error(f"Sales Database Read Error: {e}")
             return pd.DataFrame()
 
     @staticmethod
