@@ -154,9 +154,11 @@ def render_catalog():
             for idx, (_, item) in enumerate(recent_items.iterrows()):
                 with grid_cols[idx % 2]:
                     with st.container(border=True):
-                        if 'image_url' in item and str(item['image_url']).strip():
-                            st.image(item['image_url'], use_column_width=True)
-                        
+                        img_val = item.get('image_url')
+                        # Strictly check for actual URLs and ignore NULLs, NaNs, or literal "None" strings
+                        if pd.notna(img_val) and str(img_val).strip() != "" and str(img_val).strip().lower() != "none":
+                            st.image(str(img_val).strip(), use_column_width=True)
+
                         sku_val = item.get('Item_SKU', 'N/A')
                         st.code(sku_val, language=None)
                         
