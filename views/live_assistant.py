@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from data.ingestion import load_sourcing_vault
+from data.repository import BusinessRepository
 from engines.live_match import analyze_live_item, find_vault_match
 
 def render_live_assistant():
@@ -10,7 +10,7 @@ def render_live_assistant():
     # Low-Network Toggle Switch
     low_net_mode = st.toggle("📶 Low-Network Mode (Disable Camera)", key="low_net_toggle")
 
-    vault_df = load_sourcing_vault()
+    vault_df = BusinessRepository.get_sourcing_data()
     match = None
     live_bytes = None
 

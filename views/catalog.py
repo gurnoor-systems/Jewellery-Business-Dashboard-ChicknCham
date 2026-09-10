@@ -4,7 +4,7 @@ import streamlit as st
 import pandas as pd
 from PIL import Image
 
-from data.ingestion import load_sourcing_vault
+from data.repository import BusinessRepository
 from data.storage import upload_to_cloudinary, delete_from_cloudinary
 from data.sourcing import compress_image, save_to_sourcing_vault, delete_from_sourcing_vault, restock_inventory
 from engines.marketing import auto_tag_jewelry
@@ -119,7 +119,7 @@ def render_catalog():
     st.divider()
     st.markdown("##### 🕒 Cataloged Inventory")
 
-    vault_df = load_sourcing_vault()
+    vault_df = BusinessRepository.get_sourcing_data()
     if not vault_df.empty:
         # MOBILE UPGRADE: Category & Soft Archival Filters
         col_filt1, col_filt2 = st.columns([1.5, 1])
