@@ -1,6 +1,6 @@
 import streamlit as st
 from PIL import Image
-from data.ingestion import load_sourcing_vault
+from data.repository import BusinessRepository
 from engines.marketing import generate_instagram_captions
 
 def render_content_generator():
@@ -10,7 +10,7 @@ def render_content_generator():
     # --- OPTIMIZATION 1: Context-Aware Pricing ---
     auto_price = ""
     try:
-        vault_df = load_sourcing_vault()
+        vault_df = BusinessRepository.get_sourcing_data()
         if not vault_df.empty:
             # Grab the very last item added to the vault
             latest_item = vault_df.iloc[-1]
