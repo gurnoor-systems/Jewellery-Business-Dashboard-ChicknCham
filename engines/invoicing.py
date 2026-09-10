@@ -67,7 +67,7 @@ def generate_invoice_pdf(transaction_row):
             cat = str(item.get("Category", "Item"))
             custom = str(item.get("Custom Details", "")).strip()
             qty = int(item.get("Quantity", 1))
-            unit_price = float(item.get("Unit Price (₹)", 0.0))
+            unit_price = float(item.get("Selling Price (₹)", item.get("Unit Price (₹)", 0.0)))
             line_total = qty * unit_price
 
             if cat.lower() == "other" and custom:
