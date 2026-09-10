@@ -37,21 +37,23 @@ class BusinessRepository:
             return pd.DataFrame()
 
     @staticmethod
+
     def get_sourcing_data() -> pd.DataFrame:
         """Reads jewelry catalog and inventory data from Neon PostgreSQL."""
         try:
             conn = st.connection("postgresql", type="sql")
             
-            # Map SQL columns to your exact Google Sheets inventory headers
+            # Map SQL columns EXACTLY to the legacy Google Sheets headers
             query = """
                 SELECT 
                     sku AS "Item_SKU",
-                    item_name AS "Item Name",
-                    category AS "Category",
-                    cost_price AS "Cost Price",
-                    selling_price AS "Selling Price",
-                    stock_quantity AS "Stock Quantity",
-                    tags AS "Tags"
+                    cost_price AS "Sourcing_Price",
+                    tags AS "tags",
+                    image_url AS "image_url",
+                    standard_price AS "Standard_Price",
+                    vip_price AS "VIP_Price",
+                    clearance_price AS "Clearance_Price",
+                    stock_quantity AS "Stock_Quantity"
                 FROM sourcing_vault
                 ORDER BY sku ASC;
             """

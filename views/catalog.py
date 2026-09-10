@@ -137,7 +137,8 @@ def render_catalog():
         display_df = vault_df.copy()
         
         # 1. Soft Archival Filter
-        display_df['Stock_Quantity'] = pd.to_numeric(display_df.get('Stock_Quantity', 0), errors='coerce').fillna(0)
+        # Returns an empty Pandas Series instead of an integer if the column is missing
+        display_df['Stock_Quantity'] = pd.to_numeric(display_df.get('Stock_Quantity', pd.Series(dtype=float)), errors='coerce').fillna(0)
         
         if hide_sold_out:
             display_df = display_df[display_df['Stock_Quantity'] > 0]
