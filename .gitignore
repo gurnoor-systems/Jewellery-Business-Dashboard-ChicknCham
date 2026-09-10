@@ -21,3 +21,7 @@ __pycache__/
 .vscode/
 .idea/
 Thumbs.db
+
+# CSV files and migration files
+migrate.py
+*.csv

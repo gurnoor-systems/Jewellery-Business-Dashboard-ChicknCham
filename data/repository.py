@@ -38,8 +38,30 @@ class BusinessRepository:
 
     @staticmethod
     def get_sourcing_data() -> pd.DataFrame:
-        """Returns an empty DataFrame until the catalog table is migrated."""
-        return pd.DataFrame()
+        """Reads jewelry catalog and inventory data from Neon PostgreSQL."""
+        try:
+            conn = st.connection("postgresql", type="sql")
+            
+            # Map SQL columns to your exact Google Sheets inventory headers
+            query = """
+                SELECT 
+                    sku AS "Item_SKU",
+                    item_name AS "Item Name",
+                    category AS "Category",
+                    cost_price AS "Cost Price",
+                    selling_price AS "Selling Price",
+                    stock_quantity AS "Stock Quantity",
+                    tags AS "Tags"
+                FROM sourcing_vault
+                ORDER BY sku ASC;
+            """
+            
+            df = conn.query(query, ttl=0)
+            return df
+            
+        except Exception as e:
+            st.error(f"Inventory Database Read Error: {e}")
+            return pd.DataFrame()
 
     @staticmethod
     def update_transaction(order_id: str, new_amount: float, new_status: str, new_client_name: str):
