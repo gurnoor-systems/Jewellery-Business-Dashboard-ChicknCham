@@ -24,4 +24,9 @@ Thumbs.db
 
 # CSV files and migration files
 migrate.py
+migrate_sales.py
+delete_test.py
+update_db.py
+migrate_clean_sales.py
+
 *.csv

@@ -12,7 +12,7 @@ class BusinessRepository:
             conn = st.connection("postgresql", type="sql")
             
             # Pandas safely handles the spaces in the column names when fetching *
-            query = "SELECT * FROM sales_ledger ORDER BY \"Order_ID\" ASC;"
+            query = "SELECT * FROM sales ORDER BY id ASC;"
             
             df = conn.query(query, ttl=0)
             return df
@@ -61,9 +61,7 @@ class BusinessRepository:
                 session.execute(
                     text("""
                         UPDATE sales 
-                        SET formal_name = :client_name, 
-                            amount_paid = :amount, 
-                            payment_status = :status 
+                        SET formal_name = :client_name, amount_paid = :amount, payment_status = :status 
                         WHERE id = :order_id
                     """),
                     {

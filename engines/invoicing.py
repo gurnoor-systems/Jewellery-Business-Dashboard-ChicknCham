@@ -4,17 +4,16 @@ from fpdf import FPDF
 import streamlit as st
 
 def generate_invoice_pdf(transaction_row):
-    """
-    Parses the JSON line items from a database row and builds a formal PDF receipt.
-    """
+
     try:
-        # Extract variables
-        client_name = str(transaction_row.get("Client Formal Name", "Valued Client"))
-        date_of_sale = str(transaction_row.get("Date of Sale", "N/A"))
-        timestamp = str(transaction_row.get("Timestamp", "N/A"))
-        total_paid = float(transaction_row.get("Total Amount Client Paid You", 0.0))
-        json_string = str(transaction_row.get("Line_Items_JSON", "[]"))
-        
+        client_name = str(transaction_row.get("formal_name", "Valued Client"))
+        # Format the DB timestamp cleanly
+        raw_date = transaction_row.get("created_at")
+        date_of_sale = raw_date.strftime("%B %d, %Y") if pd.notna(raw_date) else "N/A"
+        timestamp = str(raw_date)
+        total_paid = float(transaction_row.get("amount_paid", 0.0))
+        json_string = str(transaction_row.get("line_items", "[]"))
+                
         # Parse JSON
         try:
             line_items = json.loads(json_string)

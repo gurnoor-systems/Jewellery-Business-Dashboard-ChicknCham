@@ -18,9 +18,9 @@ def render_pos():
     df_sales = BusinessRepository.get_sales_data()
     client_history = {}
     
-    if not df_sales.empty and 'Instagram/Facebook Handle' in df_sales.columns:
+    if not df_sales.empty and 'handle' in df_sales.columns:
         # Count lifetime orders per handle
-        order_counts = df_sales['Instagram/Facebook Handle'].value_counts().to_dict()
+        order_counts = df_sales['handle'].value_counts().to_dict()
         
         for handle, count in order_counts.items():
             if pd.isna(handle) or str(handle).strip() == "":
@@ -53,9 +53,9 @@ def render_pos():
         if selected_client_display:
             auto_handle = client_history[selected_client_display]
             
-            past_records = df_sales[df_sales['Instagram/Facebook Handle'] == auto_handle]
-            if not past_records.empty and 'Client Formal Name' in past_records.columns:
-                auto_name = str(past_records.iloc[0]['Client Formal Name'])
+            past_records = df_sales[df_sales['handle'] == auto_handle]
+            if not past_records.empty and 'formal_name' in past_records.columns:
+                auto_name = str(past_records.iloc[0]['formal_name'])
                 
             # Trigger the VIP alert!
             if "👑" in selected_client_display:

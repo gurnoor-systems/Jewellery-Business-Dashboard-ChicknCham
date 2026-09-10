@@ -8,17 +8,16 @@ def render_invoice(df_sales):
     # instead of fetching it from the database again via load_sales_data()
     sales_df = df_sales
     
-    if not sales_df.empty and 'Client Formal Name' in sales_df.columns:
+    if not sales_df.empty and 'formal_name' in sales_df.columns:
         # Filter out blank rows safely
-        valid_sales = sales_df[sales_df['Client Formal Name'].astype(str).str.strip() != ""]
+        valid_sales = sales_df[sales_df['formal_name'].astype(str).str.strip() != ""]
         
         if not valid_sales.empty:
-            # Sort by most recent first (using the index since newest rows are appended at the bottom)
-            # Added .copy() to prevent Pandas SettingWithCopyWarnings
+            # Sort by most recent first
             recent_sales = valid_sales.iloc[::-1].head(10).copy() 
             
-            # Create a clean display string for the dropdown
-            recent_sales['Display'] = recent_sales['Date of Sale'].astype(str) + " - " + recent_sales['Client Formal Name'].astype(str) + " (₹" + recent_sales['Total Amount Client Paid You'].astype(str) + ")"
+            # Create a clean display string for the dropdown using the new clean SQL columns
+            recent_sales['Display'] = recent_sales['created_at'].astype(str) + " - " + recent_sales['formal_name'].astype(str) + " (₹" + recent_sales['amount_paid'].astype(str) + ")"
             
             selected_display = st.selectbox("Select Transaction", options=recent_sales['Display'].tolist())
             
@@ -27,14 +26,14 @@ def render_invoice(df_sales):
                 selected_row = recent_sales[recent_sales['Display'] == selected_display].iloc[0]
                 
                 st.divider()
-                st.markdown(f"**Generating Invoice for:** {selected_row['Client Formal Name']}")
+                st.markdown(f"**Generating Invoice for:** {selected_row['formal_name']}")
                 
                 # Generate the PDF
                 pdf_bytes = generate_invoice_pdf(selected_row)
                 
                 if isinstance(pdf_bytes, bytes):
                     # Create a dynamic filename
-                    safe_name = str(selected_row['Client Formal Name']).replace(" ", "_")
+                    safe_name = str(selected_row['formal_name']).replace(" ", "_")
                     file_name = f"Invoice_chikncham_{safe_name}.pdf"
                     
                     st.download_button(

@@ -5,7 +5,7 @@ def render_loyalty(df_sales):
     st.subheader("Client Lifetime Value (CLV) Screener")
     st.markdown("Use this to prioritize DMs and offer exclusive sneak peeks before live sessions.")
     
-    if not df_sales.empty and 'Instagram/Facebook Handle' in df_sales.columns:
+    if not df_sales.empty and 'handle' in df_sales.columns:
         vip_data = engine_vip_loyalty(df_sales)
         col1, col2 = st.columns([3, 1])
         
@@ -20,7 +20,7 @@ def render_loyalty(df_sales):
                     
                     with card_col1:
                         # Client Handle and Status Badge
-                        st.markdown(f"**👤 {row['Instagram/Facebook Handle']}**")
+                        st.markdown(f"**👤 {row['handle']}**")
                         if row['Client Status'] == 'VIP':
                             st.caption("🌟 VIP Status")
                         else:
