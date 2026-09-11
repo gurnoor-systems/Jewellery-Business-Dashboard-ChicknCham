@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 
 def extract_cart_data(df_sales):
-    """Extracts cart data, safely handling both raw strings and PostgreSQL JSONB arrays."""
+    """Extracts cart data, prioritizing native PostgreSQL JSONB arrays over legacy strings."""
     mask = df_sales.get('payment_status', pd.Series(dtype=str)).astype(str).str.contains('paid', case=False, na=False)
     df_paid = df_sales[mask].copy()
     
@@ -15,15 +15,13 @@ def extract_cart_data(df_sales):
 
     all_items = []
     for _, row_val in df_paid['line_items'].items():
-        # Safely skip actual nulls without crashing on lists
-        if row_val is None:
-            continue
-        if isinstance(row_val, float) and pd.isna(row_val):
+        if row_val is None or (isinstance(row_val, float) and pd.isna(row_val)):
             continue
             
-        # If PostgreSQL already parsed it into a list/dict, use it directly!
+        # 1. Primary Flow: Native PostgreSQL JSONB (List/Dict)
         if isinstance(row_val, (list, dict)):
             parsed = row_val
+        # 2. Legacy Fallback: Google Sheets CSV Strings
         else:
             val_str = str(row_val).strip()
             if not val_str or val_str.lower() == 'nan':
@@ -36,6 +34,7 @@ def extract_cart_data(df_sales):
                 except Exception:
                     continue
 
+        # Standardize into a list of dicts
         if isinstance(parsed, dict):
             parsed = [parsed]
             
@@ -67,6 +66,7 @@ def extract_cart_data(df_sales):
 
 
 def engine_cost_profitability(df_sales, df_sourcing):
+    """Calculates core financial metrics, aggressively stripping formatting commas."""
     total_sales = 0.0
     true_profit = 0.0
     top_performer = "N/A"
@@ -102,13 +102,14 @@ def engine_cost_profitability(df_sales, df_sourcing):
             dead_stock = df_sourcing[df_sourcing['Date of Purchase'] < cutoff]
             amt_clean = dead_stock.get('Total Amount', pd.Series(dtype=str)).astype(str).str.replace(',', '')
             dead_stock_capital = pd.to_numeric(amt_clean, errors='coerce').fillna(0).sum()
-        except:
+        except Exception:
             pass
             
     return total_sales, true_profit, top_performer, dead_stock_capital
 
 
 def engine_cac_mom_growth(df_sales, weekly_marketing_spend):
+    """Calculates CAC and MoM growth, handling Postgres timezone enforcement."""
     mask = df_sales.get('payment_status', pd.Series(dtype=str)).astype(str).str.contains('paid', case=False, na=False)
     df_paid = df_sales[mask].copy()
     
@@ -127,7 +128,8 @@ def engine_cac_mom_growth(df_sales, weekly_marketing_spend):
     
     mom_growth = 0.0
     if 'created_at' in df_paid.columns and pd.api.types.is_datetime64_any_dtype(df_paid['created_at']):
-        df_paid['Month'] = df_paid['created_at'].dt.to_period('M')
+        # Convert tz-aware timestamps to naive before applying to_period('M') to prevent Pandas crash
+        df_paid['Month'] = df_paid['created_at'].dt.tz_localize(None).dt.to_period('M')
         rev_clean = df_paid.get('amount_paid', pd.Series(dtype=str)).astype(str).str.replace(',', '')
         monthly_rev = pd.to_numeric(rev_clean, errors='coerce').groupby(df_paid['Month']).sum()
         if len(monthly_rev) >= 2:
@@ -137,6 +139,7 @@ def engine_cac_mom_growth(df_sales, weekly_marketing_spend):
 
 
 def generate_financial_charts(df_sales):
+    """Generates Plotly charts, aggressively casting to floats for axis rendering."""
     if df_sales.empty or 'payment_status' not in df_sales.columns: return None, None
         
     mask = df_sales['payment_status'].astype(str).str.contains('paid', case=False, na=False)
@@ -144,7 +147,6 @@ def generate_financial_charts(df_sales):
     if df_paid.empty: return None, None
 
     if 'created_at' in df_paid.columns:
-        # Force UTC to align with PostgreSQL TIMESTAMP WITH TIME ZONE
         df_paid['created_at'] = pd.to_datetime(df_paid['created_at'], format='mixed', errors='coerce', utc=True)
         cutoff = pd.Timestamp.now(tz='UTC') - pd.Timedelta(days=90)
         df_trend = df_paid[df_paid['created_at'] >= cutoff].copy()
@@ -178,7 +180,6 @@ def generate_financial_charts(df_sales):
     
     if not items_df.empty and 'Display_Category' in items_df.columns:
         category_sales = items_df.groupby('Display_Category')['Quantity'].sum().reset_index()   
-        
         category_sales['Quantity'] = category_sales['Quantity'].astype(float)
         
         fig_donut = px.pie(category_sales, values='Quantity', names='Display_Category', hole=0.45)
