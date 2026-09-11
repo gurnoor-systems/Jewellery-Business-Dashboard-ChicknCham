@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from data.sales import log_new_sale
 from data.repository import BusinessRepository
+from data.sourcing import batch_deduct_inventory
 
 # VIP Threshold Configuration
 VIP_THRESHOLD = 3
@@ -100,15 +101,18 @@ def render_pos():
         add_to_cart = st.form_submit_button("🛒 Add to Cart", use_container_width=True)
         
         if add_to_cart:
-            st.session_state.pos_cart.append({
-                "Item_SKU": item_sku,
-                "Category": category,
-                "Custom Details": custom_details,
-                "Quantity": qty,
-                "Source Price (₹)": source_price,
-                "Selling Price (₹)": Selling_price
-            })
-            st.success("Item added to cart!")
+            if not item_sku:
+                st.error("⚠️ Item SKU is required.")
+            else:
+                st.session_state.pos_cart.append({
+                    "Item_SKU": str(item_sku).strip(),
+                    "Category": category,
+                    "Custom Details": custom_details,
+                    "Quantity": int(qty),
+                    "Source Price (₹)": float(source_price),
+                    "Selling Price (₹)": float(Selling_price)
+                })
+                st.success("Item added to cart!")
 
     calc_pieces = 0
     calc_cost = 0.0
@@ -184,8 +188,22 @@ def render_pos():
                 )
             
                 if success:
-                    st.success(f"✅ Sale logged successfully!", icon="🎉")
+                    # Map the UI cart schema to the strictly enforced deduction schema
+                    deduction_payload = [
+                        {"sku": item["Item_SKU"], "qty": item["Quantity"]} 
+                        for item in st.session_state.pos_cart
+                    ]
+                    
+                    # Execute atomic inventory depletion
+                    inventory_updated = batch_deduct_inventory(deduction_payload)
+                    
+                    if inventory_updated:
+                        st.success(f"✅ Sale logged and inventory depleted successfully!", icon="🎉")
+                    else:
+                        st.warning(f"✅ Sale logged, but inventory deduction failed. Please check stock manually.", icon="⚠️")
+                        
                     st.info(f"Transaction logged for {formal_name}! Total Pieces: {calc_pieces}")
+                    
                     # Clear the cart memory.
                     st.session_state.pos_cart = []
                     st.cache_data.clear()
