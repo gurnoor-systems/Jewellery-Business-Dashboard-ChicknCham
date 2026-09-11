@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 from sqlalchemy import text
+import logging
 
 class BusinessRepository:
     """Abstracts database operations so the underlying store can change later."""
@@ -11,18 +12,19 @@ class BusinessRepository:
         try:
             conn = st.connection("postgresql", type="sql")
             
-            # Pandas safely handles the spaces in the column names when fetching *
+            # Use a 10-minute cache (ttl="10m") to prevent DB hammering. 
+            # Write operations (POS/Corrections) will automatically clear this cache when new data is added.
             query = "SELECT * FROM sales ORDER BY id ASC;"
+            df = conn.query(query, ttl="10m")
             
-            df = conn.query(query, ttl=0)
             return df
             
         except Exception as e:
-            st.error(f"Sales Database Read Error: {e}")
+            logging.error(f"Sales Database Read Error: {e}", exc_info=True)
+            st.error("🚨 Failed to connect to the secure sales database.")
             return pd.DataFrame()
 
     @staticmethod
-
     def get_sourcing_data() -> pd.DataFrame:
         """Reads jewelry catalog and inventory data from Neon PostgreSQL."""
         try:
@@ -43,15 +45,16 @@ class BusinessRepository:
                 ORDER BY sku ASC;
             """
             
-            df = conn.query(query, ttl=0)
+            df = conn.query(query, ttl="10m")
             return df
             
         except Exception as e:
-            st.error(f"Inventory Database Read Error: {e}")
+            logging.error(f"Inventory Database Read Error: {e}", exc_info=True)
+            st.error("🚨 Failed to connect to the inventory database.")
             return pd.DataFrame()
 
     @staticmethod
-    def update_transaction(order_id: str, new_amount: float, new_status: str, new_client_name: str):
+    def update_transaction(order_id: str, new_amount: float, new_status: str, new_client_name: str) -> bool:
         """Safely updates a sales transaction row in PostgreSQL by Order_ID."""
         try:
             conn = st.connection("postgresql", type="sql")
@@ -61,13 +64,15 @@ class BusinessRepository:
                 session.execute(
                     text("""
                         UPDATE sales 
-                        SET formal_name = :client_name, amount_paid = :amount, payment_status = :status 
+                        SET formal_name = :client_name, 
+                            amount_paid = :amount, 
+                            payment_status = :status 
                         WHERE id = :order_id
                     """),
                     {
-                        "client_name": new_client_name,
+                        "client_name": str(new_client_name).strip(),
                         "amount": float(new_amount),
-                        "status": new_status,
+                        "status": str(new_status).strip(),
                         "order_id": int(order_id)
                     }
                 )
@@ -75,5 +80,5 @@ class BusinessRepository:
             return True
             
         except Exception as e:
-            st.error(f"Database Update Error: {e}")
-            return str(e)
+            logging.error(f"Database Update Error: {e}", exc_info=True)
+            return False
