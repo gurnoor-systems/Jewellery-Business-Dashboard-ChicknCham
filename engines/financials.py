@@ -96,8 +96,9 @@ def engine_cost_profitability(df_sales, df_sourcing):
 
     if not df_sourcing.empty and 'Date of Purchase' in df_sourcing.columns:
         try:
-            df_sourcing['Date of Purchase'] = pd.to_datetime(df_sourcing['Date of Purchase'], errors='coerce')
-            cutoff = pd.Timestamp.today() - pd.Timedelta(days=45)
+            # Force timezone awareness (UTC) to match PostgreSQL
+            df_sourcing['Date of Purchase'] = pd.to_datetime(df_sourcing['Date of Purchase'], errors='coerce', utc=True)
+            cutoff = pd.Timestamp.now(tz='UTC') - pd.Timedelta(days=45)
             dead_stock = df_sourcing[df_sourcing['Date of Purchase'] < cutoff]
             amt_clean = dead_stock.get('Total Amount', pd.Series(dtype=str)).astype(str).str.replace(',', '')
             dead_stock_capital = pd.to_numeric(amt_clean, errors='coerce').fillna(0).sum()
@@ -114,13 +115,13 @@ def engine_cac_mom_growth(df_sales, weekly_marketing_spend):
     if df_paid.empty: return 0.0, 0, 0.0
 
     if 'created_at' in df_paid.columns:
-        df_paid['created_at'] = pd.to_datetime(df_paid['created_at'], format='mixed', errors='coerce')
-        cutoff = pd.Timestamp.today() - pd.Timedelta(days=7)
+        # Force UTC to align with PostgreSQL TIMESTAMP WITH TIME ZONE
+        df_paid['created_at'] = pd.to_datetime(df_paid['created_at'], format='mixed', errors='coerce', utc=True)
+        cutoff = pd.Timestamp.now(tz='UTC') - pd.Timedelta(days=7)
         recent_sales = df_paid[df_paid['created_at'] >= cutoff]
     else:
         recent_sales = pd.DataFrame()
         
-    # Updated to the clean handle column name
     new_clients = recent_sales['handle'].nunique() if not recent_sales.empty else 0
     cac = (weekly_marketing_spend / new_clients) if new_clients > 0 else weekly_marketing_spend
     
@@ -143,8 +144,9 @@ def generate_financial_charts(df_sales):
     if df_paid.empty: return None, None
 
     if 'created_at' in df_paid.columns:
-        df_paid['created_at'] = pd.to_datetime(df_paid['created_at'], format='mixed', errors='coerce')
-        cutoff = pd.Timestamp.today() - pd.Timedelta(days=90)
+        # Force UTC to align with PostgreSQL TIMESTAMP WITH TIME ZONE
+        df_paid['created_at'] = pd.to_datetime(df_paid['created_at'], format='mixed', errors='coerce', utc=True)
+        cutoff = pd.Timestamp.now(tz='UTC') - pd.Timedelta(days=90)
         df_trend = df_paid[df_paid['created_at'] >= cutoff].copy()
     else:
         df_trend = df_paid.copy()
