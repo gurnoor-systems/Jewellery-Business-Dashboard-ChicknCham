@@ -6,7 +6,6 @@ def render_corrections():
     st.subheader("🛠️ Recent Transactions")
     st.markdown("Select the transaction to correct amounts, names, or payment statuses.")
 
-    # Memory Optimization: Fetch ONLY the last 10 rows and ONLY the required columns directly from SQL
     try:
         conn = st.connection("postgresql", type="sql")
         target_orders = conn.query("""
@@ -21,8 +20,7 @@ def render_corrections():
 
     if not target_orders.empty and 'id' in target_orders.columns:
         st.caption("⚡ Showing the 10 most recent transactions for quick editing.")
-
-        # Create a clean display string for selection using exact PostgreSQL column names
+        
         target_orders['Display'] = (
             target_orders['id'].astype(str) + " - " + 
             target_orders['formal_name'].astype(str) + " (₹" + 
@@ -32,7 +30,6 @@ def render_corrections():
         selected_display = st.selectbox("Select Order to Correct", options=target_orders['Display'].tolist())
 
         if selected_display:
-            # Extract the exact row based on selection
             selected_row = target_orders[target_orders['Display'] == selected_display].iloc[0]
             order_id = str(selected_row['id'])
 
@@ -40,13 +37,11 @@ def render_corrections():
                 st.markdown(f"**Editing Order ID:** `{order_id}`")
                 st.caption(f"Timestamp of Sale: {selected_row.get('created_at', 'N/A')}")
 
-                # Consolidated and cleaned inputs
                 new_client_name = st.text_input(
                     "Client Formal Name", 
                     value=str(selected_row.get('formal_name', '')).strip()
                 )
                 
-                # Safely parse the amount
                 try:
                     current_amount = float(selected_row.get('amount_paid', 0.0))
                 except ValueError:
@@ -68,13 +63,25 @@ def render_corrections():
                 submit_update = st.form_submit_button("💾 Save Corrections", type="primary", use_container_width=True)
 
                 if submit_update:
-                    with st.spinner("Updating secure database..."):
-                        result = BusinessRepository.update_transaction(order_id, new_amount, new_status, new_client_name)
-                        if result is True:
-                            st.toast("✅ Transaction successfully updated!", icon="🎉")
-                            st.cache_data.clear() 
-                            st.rerun()
-                        else:
-                            st.error("⚠️ Failed to update database. Check logs for details.")
+                    # STRICT BOUNDARY: Prevent blank name overwrites
+                    clean_name = str(new_client_name).strip()
+                    if not clean_name:
+                        st.error("⚠️ Formal Name cannot be blank.")
+                    else:
+                        with st.spinner("Updating secure database..."):
+                            # STRICT BOUNDARY: Force float rounding
+                            result = BusinessRepository.update_transaction(
+                                order_id, 
+                                round(float(new_amount), 2), 
+                                new_status, 
+                                clean_name
+                            )
+                            
+                            if result is True:
+                                st.toast("✅ Transaction successfully updated!", icon="🎉")
+                                st.cache_data.clear() 
+                                st.rerun()
+                            else:
+                                st.error("⚠️ Failed to update database. Check logs for details.")
     else:
         st.warning("Sales database is empty or missing required columns.")
