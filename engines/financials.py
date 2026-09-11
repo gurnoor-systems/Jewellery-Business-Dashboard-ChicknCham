@@ -4,11 +4,10 @@ import plotly.graph_objects as go
 import plotly.express as px
 
 def extract_cart_data(df_sales):
-    """Extracts cart data, enforcing strict column schemas (Data Contracts)."""
+    """Extracts cart data, safely handling both raw strings and PostgreSQL JSONB arrays."""
     mask = df_sales.get('payment_status', pd.Series(dtype=str)).astype(str).str.contains('paid', case=False, na=False)
     df_paid = df_sales[mask].copy()
     
-    # THE DATA CONTRACT: Define the exact schema guaranteed to be returned
     schema_columns = ['Category', 'Display_Category', 'Quantity']
     
     if df_paid.empty or 'line_items' not in df_paid.columns:
@@ -16,17 +15,26 @@ def extract_cart_data(df_sales):
 
     all_items = []
     for _, row_val in df_paid['line_items'].items():
-        if pd.isna(row_val): continue
-        val_str = str(row_val).strip()
-        if not val_str: continue
-
-        try:
-            parsed = json.loads(val_str)
-        except Exception:
-            try:
-                parsed = ast.literal_eval(val_str)
-            except Exception:
+        # Safely skip actual nulls without crashing on lists
+        if row_val is None:
+            continue
+        if isinstance(row_val, float) and pd.isna(row_val):
+            continue
+            
+        # If PostgreSQL already parsed it into a list/dict, use it directly!
+        if isinstance(row_val, (list, dict)):
+            parsed = row_val
+        else:
+            val_str = str(row_val).strip()
+            if not val_str or val_str.lower() == 'nan':
                 continue
+            try:
+                parsed = json.loads(val_str)
+            except Exception:
+                try:
+                    parsed = ast.literal_eval(val_str)
+                except Exception:
+                    continue
 
         if isinstance(parsed, dict):
             parsed = [parsed]
@@ -40,7 +48,6 @@ def extract_cart_data(df_sales):
                 if cat == 'Other' and det and det.lower() != 'nan':
                     disp_cat = f"Other: {det[:15]}"
                     
-                # Force absolute float math on extraction
                 raw_qty = item.get('Quantity', item.get('Qty', 1))
                 try:
                     qty = float(raw_qty)
@@ -56,7 +63,6 @@ def extract_cart_data(df_sales):
     if not all_items: 
         return pd.DataFrame(columns=schema_columns)
 
-    # FORCE PANDAS TO ACKNOWLEDGE THE EXACT COLUMNS
     return pd.DataFrame(all_items, columns=schema_columns)
 
 
@@ -114,7 +120,8 @@ def engine_cac_mom_growth(df_sales, weekly_marketing_spend):
     else:
         recent_sales = pd.DataFrame()
         
-    new_clients = recent_sales['Instagram/Facebook Handle'].nunique() if not recent_sales.empty else 0
+    # Updated to the clean handle column name
+    new_clients = recent_sales['handle'].nunique() if not recent_sales.empty else 0
     cac = (weekly_marketing_spend / new_clients) if new_clients > 0 else weekly_marketing_spend
     
     mom_growth = 0.0
@@ -142,7 +149,6 @@ def generate_financial_charts(df_sales):
     else:
         df_trend = df_paid.copy()
 
-    # STRIP COMMAS & FORCE FLOATS TO KILL THE Y-AXIS BUG
     rev_c = df_trend.get('amount_paid', pd.Series(dtype=str)).astype(str).str.replace(',', '')
     cost_c = df_trend.get('total_cost', pd.Series(dtype=str)).astype(str).str.replace(',', '')
     cour_c = df_trend.get('courier_charge', pd.Series(dtype=str)).astype(str).str.replace(',', '')
@@ -157,7 +163,6 @@ def generate_financial_charts(df_sales):
         True_Profit=('True Profit', 'sum')
     ).reset_index()
 
-    # DOUBLE CONFIRMATION FLOATS FOR PLOTLY
     df_grouped['Gross_Revenue'] = df_grouped['Gross_Revenue'].astype(float)
     df_grouped['True_Profit'] = df_grouped['True_Profit'].astype(float)
 
@@ -172,7 +177,6 @@ def generate_financial_charts(df_sales):
     if not items_df.empty and 'Display_Category' in items_df.columns:
         category_sales = items_df.groupby('Display_Category')['Quantity'].sum().reset_index()   
         
-        # FINAL MATH CAST FOR DONUT CHART         
         category_sales['Quantity'] = category_sales['Quantity'].astype(float)
         
         fig_donut = px.pie(category_sales, values='Quantity', names='Display_Category', hole=0.45)

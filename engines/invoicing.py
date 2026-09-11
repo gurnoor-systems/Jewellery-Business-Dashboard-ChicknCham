@@ -1,24 +1,38 @@
-import json
+import json, ast
 import pandas as pd
 from fpdf import FPDF
 import streamlit as st
 
 def generate_invoice_pdf(transaction_row):
-
     try:
         client_name = str(transaction_row.get("formal_name", "Valued Client"))
+        
         # Format the DB timestamp cleanly
         raw_date = transaction_row.get("created_at")
-        date_of_sale = raw_date.strftime("%B %d, %Y") if pd.notna(raw_date) else "N/A"
+        if pd.notna(raw_date):
+            try:
+                date_of_sale = pd.to_datetime(raw_date).strftime("%B %d, %Y")
+            except Exception:
+                date_of_sale = str(raw_date)
+        else:
+            date_of_sale = "N/A"
+            
         timestamp = str(raw_date)
         total_paid = float(transaction_row.get("amount_paid", 0.0))
-        json_string = str(transaction_row.get("line_items", "[]"))
-                
-        # Parse JSON
-        try:
-            line_items = json.loads(json_string)
-        except Exception:
-            line_items = [{"Category": "Item", "Quantity": 1, "Unit Price (₹)": total_paid}]
+        
+        # Safely handle PostgreSQL JSONB lists vs Strings
+        raw_items = transaction_row.get("line_items", [])
+        
+        if isinstance(raw_items, (list, dict)):
+            line_items = raw_items if isinstance(raw_items, list) else [raw_items]
+        else:
+            try:
+                line_items = json.loads(str(raw_items))
+            except Exception:
+                try:
+                    line_items = ast.literal_eval(str(raw_items))
+                except Exception:
+                    line_items = [{"Category": "Item", "Quantity": 1, "Selling Price (₹)": total_paid}]
 
         # Initialize PDF
         pdf = FPDF()
@@ -39,7 +53,7 @@ def generate_invoice_pdf(transaction_row):
         # --- CLIENT & ORDER INFO ---
         pdf.set_font("Helvetica", "B", 11)
         # Generate a cleaner invoice ID
-        clean_id = timestamp.replace('/', '').replace(':', '').replace(' ', '')[-6:]
+        clean_id = timestamp.replace('/', '').replace(':', '').replace(' ', '').replace('-', '')[-6:]
         
         pdf.cell(100, 8, f"Billed To: {client_name}", ln=False)
         pdf.set_font("Helvetica", "", 10)
