@@ -1,5 +1,6 @@
 # Streamlit Secrets (CRITICAL: Do NOT commit real credentials)
 .streamlit/secrets.toml
+.DS_Store
 
 # Local Service Account JSON files (if downloaded locally)
 *.json
@@ -7,6 +8,8 @@
 # Python Virtual Environments
 venv/
 .venv/
+__pycache__/
+*.pyc
 env/
 ENV/
 
@@ -30,3 +33,6 @@ update_db.py
 migrate_clean_sales.py
 
 *.csv
+
+# Internal codes
+brain.md

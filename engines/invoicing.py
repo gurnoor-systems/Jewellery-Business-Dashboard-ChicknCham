@@ -1,11 +1,18 @@
-import json, ast
+import json
+import ast
 import pandas as pd
 from fpdf import FPDF
 import streamlit as st
 
 def generate_invoice_pdf(transaction_row):
+    """
+    Generates a secure, production-grade PDF invoice from a transaction record.
+    Safely handles PostgreSQL JSONB structures, zero-division/type bugs, and sequential IDs.
+    """
     try:
-        client_name = str(transaction_row.get("formal_name", "Valued Client"))
+        client_name = str(transaction_row.get("formal_name", "Valued Client")).strip()
+        if not client_name or client_name.lower() == "nan":
+            client_name = "Valued Client"
         
         # Format the DB timestamp cleanly
         raw_date = transaction_row.get("created_at")
@@ -18,7 +25,13 @@ def generate_invoice_pdf(transaction_row):
             date_of_sale = "N/A"
             
         timestamp = str(raw_date)
-        total_paid = float(transaction_row.get("amount_paid", 0.0))
+        
+        # Safely parse total paid amount
+        raw_total = str(transaction_row.get("amount_paid", "0.0")).replace(",", "").strip()
+        try:
+            total_paid = float(raw_total)
+        except ValueError:
+            total_paid = 0.0
         
         # Safely handle PostgreSQL JSONB lists vs Strings
         raw_items = transaction_row.get("line_items", [])
@@ -52,8 +65,17 @@ def generate_invoice_pdf(transaction_row):
         
         # --- CLIENT & ORDER INFO ---
         pdf.set_font("Helvetica", "B", 11)
-        # Generate a cleaner invoice ID
-        clean_id = timestamp.replace('/', '').replace(':', '').replace(' ', '').replace('-', '')[-6:]
+
+        # Generate a clean, sequential invoice ID using the database primary key
+        db_id = transaction_row.get("id")
+        if pd.notna(db_id):
+            try:
+                clean_id = f"{int(db_id):04d}"  # Pads the ID with zeros, e.g., 0014
+            except ValueError:
+                clean_id = "0001"
+        else:
+            # Fallback just in case
+            clean_id = timestamp.split('+')[0].replace('-', '').replace(':', '').replace(' ', '')[-6:]
         
         pdf.cell(100, 8, f"Billed To: {client_name}", ln=False)
         pdf.set_font("Helvetica", "", 10)
@@ -79,13 +101,24 @@ def generate_invoice_pdf(transaction_row):
         for item in line_items:
             cat = str(item.get("Category", "Item"))
             custom = str(item.get("Custom Details", "")).strip()
-            qty = int(item.get("Quantity", 1))
-            unit_price = float(item.get("Selling Price (₹)", item.get("Unit Price (₹)", 0.0)))
+            
+            # Safe numeric coercion for quantities and prices
+            try:
+                qty = int(float(str(item.get("Quantity", 1)).replace(",", "")))
+            except ValueError:
+                qty = 1
+                
+            raw_price = item.get("Selling Price (₹)", item.get("Unit Price (₹)", 0.0))
+            try:
+                unit_price = float(str(raw_price).replace(",", "").strip())
+            except ValueError:
+                unit_price = 0.0
+                
             line_total = qty * unit_price
 
-            if cat.lower() == "other" and custom:
+            if cat.lower() == "other" and custom and custom.lower() != "nan":
                 display_name = custom
-            elif custom:
+            elif custom and custom.lower() != "nan":
                 display_name = f"{cat} ({custom})"
             else:
                 display_name = cat
@@ -118,7 +151,7 @@ def generate_invoice_pdf(transaction_row):
         # Bottom line with the hyperlink
         pdf.set_text_color(0, 0, 255) # Link Blue
         pdf.set_font("Helvetica", "UB", 10) # Underlined and Bold
-        pdf.cell(0, 6, "@chik_n_cham_by_laddi for 10% off your next order!", align="C", link="https://instagram.com/Chik_n_Cham_by_laddi")
+        pdf.cell(0, 6, "@chik_n_cham_by_laddi for 10% off your next order!", align="C", link="https://instagram.com/Chik_n_cham_by_laddi")
         
         return bytes(pdf.output())
         
