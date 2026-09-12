@@ -13,21 +13,23 @@ def render_loyalty(df_sales):
             st.markdown("#### 🏆 Top High-Value Clients")
             
             for index, row in vip_data.head(10).iterrows():
-                # Wrap each client in their own distinct visual box
                 with st.container(border=True):
-                    # Use columns to align the data perfectly on a phone screen
-                    card_col1, card_col2 = st.columns([2, 1])
+                    # MOBILE FIX: Adjust ratio to 3:1 to give long handles more breathing room
+                    card_col1, card_col2 = st.columns([3, 1])
                     
                     with card_col1:
-                        # Client Handle and Status Badge
-                        st.markdown(f"**👤 {row['handle']}**")
+                        # MOBILE FIX: Truncate handles longer than 25 characters to prevent visual overflow
+                        raw_handle = str(row['handle'])
+                        display_handle = raw_handle if len(raw_handle) <= 25 else raw_handle[:22] + "..."
+                        
+                        st.markdown(f"**👤 {display_handle}**")
+                        
                         if row['Client Status'] == 'VIP':
                             st.caption("🌟 VIP Status")
                         else:
                             st.caption("✅ Active Client")
                             
                     with card_col2:
-                        # Financial Metrics aligned to the right
                         st.markdown(f"**₹{row['Lifetime_Spend']:,.0f}**")
                         st.caption(f"🛍️ {row['Total_Orders']} Orders")
                 

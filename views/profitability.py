@@ -34,32 +34,46 @@ def render_profitability(df_sales, df_sourcing, weekly_spend):
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Realized Revenue", f"₹{sales:,.0f}")
         col2.metric("True Net Profit", f"₹{profit:,.0f}")
-        col3.metric("Top Performer", top_item)
+        
+        # UI FALLBACK: Prevent printing "N/A"
+        clean_top_item = top_item if top_item != "N/A" else "Insufficient Data"
+        col3.metric("Top Performer", clean_top_item)
         col4.metric("⚠️ 45-Day Dead Stock", f"₹{dead_capital:,.0f}", delta="Capital Trapped", delta_color="inverse")
         
         st.divider()
 
-        # 5. Interactive Charts
+        # 5. Interactive Charts (STRICT NULL HANDLING)
         fig_trend, fig_donut = generate_financial_charts(df_sales)
-        if fig_trend and fig_donut:
+        
+        # Explicitly check that the variables contain valid Plotly objects, not None
+        if fig_trend is not None and fig_donut is not None:
             chart_col1, chart_col2 = st.columns([3, 2])
             with chart_col1:
                 st.plotly_chart(fig_trend, use_container_width=True)
             with chart_col2:
                 st.plotly_chart(fig_donut, use_container_width=True)
             st.divider()
+        else:
+            st.info("📉 Not enough paid transactions yet to generate trend charts. Keep selling!")
+            st.divider()
 
         st.markdown("#### 📱 Weekly WhatsApp Summary")
         st.info("Copy this summary to send directly to the business owner.")
+        
         summary_text = (
             f"📊 *Weekly Operations Update*\n"
             f"Total Sales: ₹{sales:,.0f}\n"
             f"True Profit: ₹{profit:,.0f}\n"
             f"🚀 MoM Growth: {mom:,.1f}%\n"
             f"🎯 CAC: {wa_cac_label}/client (₹{weekly_spend:,.2f} total spend)\n"
-            f"🔥 Top Performer: {top_item}\n"
-            f"⚠️ Note: You have ₹{dead_capital:,.0f} tied up in stock older than 45 days. Consider discounting older pieces on the next live!"
         )
+        
+        # CLEAN FALLBACK: Conditionally add the performer line only if data exists
+        if top_item != "N/A":
+            summary_text += f"🔥 Top Performer: {top_item}\n"
+            
+        summary_text += f"⚠️ Note: You have ₹{dead_capital:,.0f} tied up in stock older than 45 days. Consider discounting older pieces on the next live!"
+        
         st.code(summary_text, language="markdown")
     else:
         st.warning("Insufficient data to calculate profitability.")
