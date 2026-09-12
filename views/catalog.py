@@ -14,10 +14,11 @@ def render_catalog():
     st.caption("Snap a photo. Let the AI do the heavy lifting.")
 
     # Initialize a dynamic key counter for rapid-fire resets
+
     if 'vault_form_key' not in st.session_state:
         st.session_state.vault_form_key = 0
     svfk = st.session_state.vault_form_key
-    
+
     # Pre-initialize the form fields in memory so the AI can safely overwrite them
     if f"vault_cat_{svfk}" not in st.session_state:
         st.session_state[f"vault_cat_{svfk}"] = "Choker Set"
@@ -66,7 +67,7 @@ def render_catalog():
             raw_tags = st.text_input("Additional Tags", value=st.session_state[f"vault_tags_{svfk}"], placeholder="e.g., Mint Green, Pearl Drops")
 
             st.divider()
-            
+
             # Restoring Custom Pricing safely inside a Form
             with st.expander("⚙️ (click here) to Enter your Custom Pricing", expanded=False):
                 st.caption("Leave at ₹0.0 to auto-calculate (1.8x, 1.5x, 1.2x). Enter a value to set a custom price.")
@@ -77,9 +78,11 @@ def render_catalog():
 
             generated_sku = f"JK-{int(time.time())}-{uuid.uuid4().hex[:4].upper()}"
     
-            save_btn = st.form_submit_button("💾 Save to Vault", type="primary", use_container_width=True)
+            # CONCURRENCY FIX: Lock the button after the first click to prevent double-DB entries
+            save_btn = st.form_submit_button("💾 Save to Vault", type="primary", use_container_width=True, disabled=st.session_state.get(f"submitting_{svfk}", False))
 
             if save_btn:
+                st.session_state[f"submitting_{svfk}"] = True # Lock UI
                 with st.spinner("Securing to database..."):
                     raw_bytes = active_photo.getvalue()
                     compressed_bytes = compress_image(raw_bytes)
@@ -88,7 +91,6 @@ def render_catalog():
                     if "🚨" not in cdn_url:
                         combined_tags = f"{category}, {raw_tags}" if raw_tags else category
                         
-                        # Backend Math Override Logic
                         final_std = custom_std_override if custom_std_override > 0 else float(sourcing_price * 1.8)
                         final_vip = custom_vip_override if custom_vip_override > 0 else float(sourcing_price * 1.5)
                         final_clr = custom_clr_override if custom_clr_override > 0 else float(sourcing_price * 1.2)
@@ -105,15 +107,22 @@ def render_catalog():
                         )
                 
                         if is_saved:
+                            # MEMORY FIX: Clean up the old dynamic keys before creating new ones
+                            for key in list(st.session_state.keys()):
+                                if key.endswith(f"_{svfk}"):
+                                    del st.session_state[key]
+                                    
                             st.session_state.vault_form_key += 1
                             st.toast(f"✅ Saved {generated_sku}! Ready for next item.", icon="🎉")
-                            st.balloons() # UX Delight for the client
+                            st.balloons() 
                             st.cache_data.clear() 
                             st.rerun() 
                         else:
                             st.error("⚠️ Failed to update database.")
+                            st.session_state[f"submitting_{svfk}"] = False # Unlock on failure
                     else:
                         st.error(cdn_url)
+                        st.session_state[f"submitting_{svfk}"] = False # Unlock on failure
 
     # 3. Recently Cataloged Mini-Gallery
     st.divider()
@@ -132,10 +141,10 @@ def render_catalog():
             )
         with col_filt2:
             hide_sold_out = st.toggle("Hide Sold Out", value=True)
-        
+
         # Apply Pandas filtering logic based on selections
         display_df = vault_df.copy()
-        
+
         # 1. Soft Archival Filter
         # Returns an empty Pandas Series instead of an integer if the column is missing
         display_df['Stock_Quantity'] = pd.to_numeric(display_df.get('Stock_Quantity', pd.Series(dtype=float)), errors='coerce').fillna(0)
@@ -155,14 +164,17 @@ def render_catalog():
                 with grid_cols[idx % 2]:
                     with st.container(border=True):
                         img_val = item.get('image_url')
+
                         # Strictly check for actual URLs and ignore NULLs, NaNs, or literal "None" strings
+
                         if pd.notna(img_val) and str(img_val).strip() != "" and str(img_val).strip().lower() != "none":
                             st.image(str(img_val).strip(), use_column_width=True)
 
                         sku_val = item.get('Item_SKU', 'N/A')
                         st.code(sku_val, language=None)
-                        
+
                         # MOBILE UPGRADE: Visual Stock Badges
+                        #  
                         current_stock = int(item.get('Stock_Quantity', 0))
                         
                         if current_stock >= 3:

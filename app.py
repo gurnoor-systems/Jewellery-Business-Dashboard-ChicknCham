@@ -45,6 +45,7 @@ hide_st_style = """
             header {visibility: hidden;}
 
             /* Enlarge Button Touch Targets */
+
             .stButton > button {
                 min-height: 48px;
                 border-radius: 8px;
@@ -53,12 +54,14 @@ hide_st_style = """
             }
 
             /* Enlarge Input Fields (Text, Number, Dropdowns) */
+
             input, .stSelectbox div[data-baseweb="select"] {
                 min-height: 45px;
                 border-radius: 6px;
             }
-            
+
             /* Add Padding to Metric Cards */
+
             div[data-testid="stMetric"] {
                 background-color: rgba(255, 255, 255, 0.05); 
                 border-radius: 10px;
@@ -74,13 +77,12 @@ st.markdown(hide_st_style, unsafe_allow_html=True)
 # 2. SECURITY WALL and TTL TIMEOUT
 # ==========================================
 
-SESSION_TIMEOUT_SECONDS = 900  # 15 minutes of inactivity allowed
+SESSION_TIMEOUT_SECONDS = 900  # 15 minutes timeout for inactivity allowed
 
 def check_password():
     """Returns True if the user entered the correct password and the session is fresh """
     
     # 1. Fast-Pass: If already authenticated, skip the checks and grant access immediately.
-    # This completely protects the app from logging you out during PDF downloads.
 
     current_time = time.time()
 
@@ -92,22 +94,24 @@ def check_password():
         if (current_time - last_active) > SESSION_TIMEOUT_SECONDS:
             st.session_state["password_correct"] = False
             st.session_state["last_active_time"] = None
+            
+            # STRICT BOUNDARY: Dump the POS cart upon timeout to prevent data bleed
+            if 'pos_cart' in st.session_state:
+                st.session_state.pos_cart = []
+                
             st.warning("⏱️ Session timed out due to inactivity. Please log in again.")
-            # Drops down to render the login UI below
         else:
             # Session is valid: update the timestamp to right now
             st.session_state["last_active_time"] = current_time
             return True
-        
+
     # 2. Verification Logic
     def verify_password():
         input_pass = st.session_state.get("admin_password_input", "")
         input_hash = hashlib.sha256(input_pass.encode()).hexdigest()
         if input_hash == st.secrets["admin"]["password_hash"]:
-
             st.session_state["password_correct"] = True
-            st.session_state["last_active_time"] = time.time() # Start the clock
-
+            st.session_state["last_active_time"] = time.time() 
         else:
             st.session_state["password_correct"] = False
 
@@ -117,9 +121,9 @@ def check_password():
         "Enter Admin Password", 
         type="password", 
         on_change=verify_password, 
-        key="admin_password_input" # Changed key name to prevent ghost memory from the old bug
+        key="admin_password_input" 
     )
-    
+
     # 4. Error Handling
     if "password_correct" in st.session_state and not st.session_state["password_correct"]:
         st.error("🚫 Access Denied: Incorrect Password")
@@ -150,10 +154,11 @@ def main():
         # ==========================================
         # 🛡️ CLIENT SAFETY NET: Instant Data Backup
         # ==========================================
+
         st.subheader("💾 Backup Your Records")
         st.caption("Download a complete, offline copy of all recorded sales anytime.")
 
-        # Ensure we have data to export
+        # Ensure we have data to export before showing the download button.
         try:
             df_export = BusinessRepository.get_sales_data()
             if not df_export.empty:
@@ -214,7 +219,6 @@ def main():
             render_corrections()
 
     except Exception as e:
-
         logging.error(f"Critical System Failure: {e}", exc_info=True)
         st.error("⚠️ The system is currently busy or experiencing high traffic. Please try again in a few moments.")
 
