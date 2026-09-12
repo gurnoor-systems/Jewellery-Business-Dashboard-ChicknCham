@@ -1,4 +1,5 @@
 import streamlit as st
+import re
 from engines.invoicing import generate_invoice_pdf
 
 def render_invoice(df_sales):
@@ -32,8 +33,9 @@ def render_invoice(df_sales):
                 pdf_bytes = generate_invoice_pdf(selected_row)
                 
                 if isinstance(pdf_bytes, bytes):
-                    # Create a dynamic filename
-                    safe_name = str(selected_row['formal_name']).replace(" ", "_")
+                    # STRICT RENDERING: Strip invalid OS path characters from filename
+                    raw_name = str(selected_row['formal_name'])
+                    safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', raw_name).strip('_')
                     file_name = f"Invoice_chikncham_{safe_name}.pdf"
                     
                     st.download_button(

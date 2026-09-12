@@ -4,15 +4,25 @@ import pandas as pd
 from fpdf import FPDF
 import streamlit as st
 
+def sanitize_latin1(text_str):
+    """Safely strips emojis and non-latin characters to prevent fpdf Unicode crashes."""
+    if not isinstance(text_str, str):
+        text_str = str(text_str)
+    # Encode to latin-1 and ignore invalid characters, then decode back to string
+    return text_str.encode('latin-1', 'ignore').decode('latin-1').strip()
+
 def generate_invoice_pdf(transaction_row):
     """
     Generates a secure, production-grade PDF invoice from a transaction record.
     Safely handles PostgreSQL JSONB structures, zero-division/type bugs, and sequential IDs.
     """
     try:
-        client_name = str(transaction_row.get("formal_name", "Valued Client")).strip()
-        if not client_name or client_name.lower() == "nan":
-            client_name = "Valued Client"
+        raw_name = str(transaction_row.get("formal_name", "Valued Client")).strip()
+        if not raw_name or raw_name.lower() == "nan":
+            raw_name = "Valued Client"
+            
+        # STRICT RENDERING: Prevent fpdf crash from emojis/foreign characters
+        client_name = sanitize_latin1(raw_name)
         
         # Format the DB timestamp cleanly
         raw_date = transaction_row.get("created_at")
@@ -99,8 +109,8 @@ def generate_invoice_pdf(transaction_row):
         # --- TABLE ROWS ---
         pdf.set_font("Helvetica", "", 10)
         for item in line_items:
-            cat = str(item.get("Category", "Item"))
-            custom = str(item.get("Custom Details", "")).strip()
+            cat = sanitize_latin1(item.get("Category", "Item"))
+            custom = sanitize_latin1(item.get("Custom Details", ""))
             
             # Safe numeric coercion for quantities and prices
             try:
