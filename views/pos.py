@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
-from data.sales import log_new_sale
+import time
+from data.sales import log_sale_and_deduct_atomic
 from data.repository import BusinessRepository
-from data.sourcing import batch_deduct_inventory
 
 # VIP Threshold Configuration
 VIP_THRESHOLD = 3
@@ -144,11 +144,11 @@ def render_pos():
         elif len(st.session_state.pos_cart) == 0:
             st.error("⚠️ Please add at least one item to the cart.")
         else:
-            with st.spinner("Logging transaction to database..."):
+            with st.spinner("Executing atomic transaction..."):
                 pos_df = pd.DataFrame(st.session_state.pos_cart)
                 
-                # STRICT BOUNDARY: Round financials to 2 decimals to prevent float leak
-                success = log_new_sale(
+                # TRUE ATOMICITY: Unified commit for both financial ledger and inventory depletion
+                success = log_sale_and_deduct_atomic(
                     formal_name=clean_name,
                     handle=clean_handle,
                     line_items_df=pos_df,
@@ -160,18 +160,14 @@ def render_pos():
                 )
             
                 if success:
-                    deduction_payload = [
-                        {"sku": item["Item_SKU"], "qty": item["Quantity"]} 
-                        for item in st.session_state.pos_cart
-                    ]
-                    inventory_updated = batch_deduct_inventory(deduction_payload)
+                    st.success(f"✅ Transaction settled and inventory perfectly synced!", icon="🎉")
+                    st.info(f"Logged for {clean_name}! Total Pieces: {calc_pieces}")
                     
-                    if inventory_updated:
-                        st.success(f"✅ Sale logged and inventory depleted successfully!", icon="🎉")
-                    else:
-                        st.warning(f"✅ Sale logged, but inventory deduction failed. Please check stock manually.", icon="⚠️")
-                        
-                    st.info(f"Transaction logged for {clean_name}! Total Pieces: {calc_pieces}")
+                    # Only clear the cart if the database committed successfully
                     st.session_state.pos_cart = []
                     st.cache_data.clear()
+                    time.sleep(1.5)
                     st.rerun()
+                else:
+                    # The safety net: UI shows an error, but the cart memory is preserved!
+                    st.error("🚨 Transaction Failed. The database rolled back to prevent mismatched records. Please check the item SKUs and try again.")
