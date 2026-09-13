@@ -23,7 +23,7 @@ from views.catalog import render_catalog
 from views.live_assistant import render_live_assistant 
 from views.pos import render_pos
 from views.invoice import render_invoice
-from views.corrections import render_corrections
+from views.mirror import render_mirror
 
 # SKU Unique Identifier Generator
 
@@ -191,7 +191,7 @@ def main():
             "🔴 Jewelery info!",
             "🛒 Log a Sale",
             "🧾 Invoice",
-            "🛠️ Recent Transactions"
+            "🪞 Database Mirror"
         ])
 
         with tab1:
@@ -216,7 +216,7 @@ def main():
             render_pos()
     
         with tab8:
-            render_corrections()
+            render_mirror()
 
     except Exception as e:
         logging.error(f"Critical System Failure: {e}", exc_info=True)
