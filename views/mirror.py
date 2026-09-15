@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-from sqlalchemy import text
 from data.repository import BusinessRepository
 
 def render_mirror():
@@ -17,19 +16,19 @@ def render_mirror():
     
     with st.spinner("Querying secure ledger..."):
         if search_query:
-            sql = text("""
+            sql = """
                 SELECT id, created_at, formal_name, handle, amount_paid, payment_status 
                 FROM sales 
                 WHERE formal_name ILIKE :search OR handle ILIKE :search
                 ORDER BY created_at DESC LIMIT 50
-            """)
+            """
             df = conn.query(sql, params={"search": f"%{search_query.strip()}%"})
         else:
-            sql = text("""
+            sql = """
                 SELECT id, created_at, formal_name, handle, amount_paid, payment_status 
                 FROM sales 
                 ORDER BY created_at DESC LIMIT 50
-            """)
+            """
             df = conn.query(sql)
 
     if not df.empty:
