@@ -22,7 +22,6 @@ def extract_cart_data(df_sales):
     df_paid = df_sales[mask].copy()
     
     line_items_col = get_col_safe(df_paid, ['line_items', 'cart'])
-    # FIX: Safely check for None instead of using .sum() on a column of dictionaries
     if df_paid.empty or line_items_col is None:
         return pd.DataFrame(columns=schema_columns)
 
@@ -112,7 +111,6 @@ def engine_cost_profitability(df_sales, df_sourcing):
 
     if not df_sourcing.empty:
         date_col = get_col_safe(df_sourcing, ['date of purchase', 'created_at', 'date'])
-        # FIX: Check if date_col is not None instead of trying to run .sum() on dates
         if date_col is not None:
             try:
                 df_sourcing['Safe_Date'] = pd.to_datetime(date_col, errors='coerce', utc=True)
@@ -180,7 +178,6 @@ def generate_financial_charts(df_sales):
     if created_col is None: return empty_fig, empty_fig
     
     df_paid['Safe_Date'] = pd.to_datetime(created_col, format='mixed', errors='coerce', utc=True)
-    # FIX: Drop NaT (Not a Time) values so they don't break Plotly axes
     df_paid = df_paid.dropna(subset=['Safe_Date'])
     if df_paid.empty: return empty_fig, empty_fig
     
@@ -201,8 +198,10 @@ def generate_financial_charts(df_sales):
     df_trend['Cour'] = pd.to_numeric(cour_c, errors='coerce').fillna(0).astype(float)
     df_trend['True Profit'] = df_trend['Rev'] - (df_trend['Cost'] + df_trend['Cour'])
 
+    # Standard GroupBy
     df_grouped = df_trend.groupby(df_trend['Safe_Date'].dt.date)[['Rev', 'True Profit']].sum().reset_index()
 
+    # PURE LIST COERCION: Forces Plotly to render actual money
     x_dates = df_grouped['Safe_Date'].tolist()
     y_rev = df_grouped['Rev'].tolist()
     y_prof = df_grouped['True Profit'].tolist()

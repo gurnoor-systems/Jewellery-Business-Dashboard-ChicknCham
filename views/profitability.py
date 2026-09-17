@@ -36,7 +36,6 @@ def render_profitability(df_sales, df_sourcing, weekly_spend):
         col1.metric("Realized Revenue", f"₹{sales:,.0f}")
         col2.metric("True Net Profit", f"₹{profit:,.0f}")
         
-        # UI FALLBACK: Prevent printing "N/A"
         clean_top_item = top_item if top_item != "N/A" else "Insufficient Data"
         col3.metric("Top Performer", clean_top_item)
         col4.metric("⚠️ 45-Day Dead Stock", f"₹{dead_capital:,.0f}", delta="Capital Trapped", delta_color="inverse")
