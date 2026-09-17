@@ -161,8 +161,9 @@ def engine_cac_mom_growth(df_sales, weekly_marketing_spend):
     return cac, new_clients, mom_growth
 
 def generate_financial_charts(df_sales):
+    """Generates Plotly charts utilizing pure Python lists to bypass Plotly/Pandas metadata indexing bugs."""
     empty_fig = go.Figure()
-    empty_fig.update_layout(title="No Data Available")
+    empty_fig.update_layout(title="No Data Available", margin=dict(t=40, b=10, l=10, r=10))
     
     if df_sales.empty: return empty_fig, empty_fig
         
@@ -198,8 +199,9 @@ def generate_financial_charts(df_sales):
     df_trend['Cour'] = pd.to_numeric(cour_c, errors='coerce').fillna(0).astype(float)
     df_trend['True Profit'] = df_trend['Rev'] - (df_trend['Cost'] + df_trend['Cour'])
 
-    # Standard GroupBy
+    # Standard GroupBy & explicitly sort by date to prevent line-chart tangling
     df_grouped = df_trend.groupby(df_trend['Safe_Date'].dt.date)[['Rev', 'True Profit']].sum().reset_index()
+    df_grouped = df_grouped.sort_values('Safe_Date')
 
     # PURE LIST COERCION: Forces Plotly to render actual money
     x_dates = df_grouped['Safe_Date'].tolist()
@@ -219,6 +221,8 @@ def generate_financial_charts(df_sales):
         category_sales['Quantity'] = category_sales['Quantity'].astype(float)
         
         fig_donut = px.pie(category_sales, values='Quantity', names='Display_Category', hole=0.45)
+        # Quality Polish: Add exact unit counts inside the pie chart to prove the math
+        fig_donut.update_traces(textinfo='value+percent', textposition='inside')
         fig_donut.update_layout(title="Sales Distribution by Category", margin=dict(t=40, b=10, l=10, r=10))
 
     return fig_trend, fig_donut

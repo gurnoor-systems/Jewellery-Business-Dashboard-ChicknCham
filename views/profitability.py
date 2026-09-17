@@ -24,11 +24,11 @@ def render_profitability(df_sales, df_sourcing, weekly_spend):
             wa_cac_label = f"₹{cac:,.2f}"
             cac_delta = "Spend per Client"
         else:
-            ui_cac_label = "₹0 " 
-            wa_cac_label = "₹0 "
+            ui_cac_label = "₹0" 
+            wa_cac_label = "₹0"
             cac_delta = "Spend per Client"
+            
         metric_col3.metric("Customer Acquisition Cost (CAC)", ui_cac_label, delta=cac_delta, delta_color="inverse")
-        
         st.divider()
 
         # 4. Core Financial KPIs
@@ -39,7 +39,6 @@ def render_profitability(df_sales, df_sourcing, weekly_spend):
         clean_top_item = top_item if top_item != "N/A" else "Insufficient Data"
         col3.metric("Top Performer", clean_top_item)
         col4.metric("⚠️ 45-Day Dead Stock", f"₹{dead_capital:,.0f}", delta="Capital Trapped", delta_color="inverse")
-        
         st.divider()
 
         # 5. Interactive Charts (Connected directly to the hardened engine)
@@ -51,11 +50,12 @@ def render_profitability(df_sales, df_sourcing, weekly_spend):
                 st.plotly_chart(fig_trend, use_container_width=True)
             with chart_col2:
                 st.plotly_chart(fig_donut, use_container_width=True)
-            st.divider()
         else:
             st.info("📉 Not enough paid transactions yet to generate trend charts. Keep selling!")
-            st.divider()
+            
+        st.divider()
 
+        # 6. WhatsApp Output
         st.markdown("#### 📱 Weekly WhatsApp Summary")
         st.info("Copy this summary to send directly to the business owner.")
         
