@@ -34,23 +34,20 @@ def extract_cart_data(df_sales):
                 except Exception:
                     continue
 
+        # Standardize into a list of dicts
         if isinstance(parsed, dict):
             parsed = [parsed]
             
         if isinstance(parsed, list):
             for item in parsed:
-                # FIX 1: Convert all JSON keys to lowercase to prevent KeyErrors
-                safe_item = {str(k).lower(): v for k, v in item.items()}
-                
-                cat = str(safe_item.get('category', 'Unknown')).strip().title()
-                det = str(safe_item.get('custom details', safe_item.get('custom_details', ''))).strip().title()
+                cat = str(item.get('Category', 'Unknown')).strip().title()
+                det = str(item.get('Custom Details', '')).strip().title()
                 
                 disp_cat = cat
                 if cat == 'Other' and det and det.lower() != 'nan':
                     disp_cat = f"Other: {det[:15]}"
                     
-                # Now it catches 'Quantity', 'quantity', or 'QTY'
-                raw_qty = safe_item.get('quantity', safe_item.get('qty', 1))
+                raw_qty = item.get('Quantity', item.get('Qty', 1))
                 try:
                     qty = float(raw_qty)
                 except ValueError:
@@ -69,7 +66,7 @@ def extract_cart_data(df_sales):
 
 
 def engine_cost_profitability(df_sales, df_sourcing):
-    """Calculates core financial metrics, aggressively stripping formatting commas and currency symbols."""
+    """Calculates core financial metrics, aggressively stripping formatting commas."""
     total_sales = 0.0
     true_profit = 0.0
     top_performer = "N/A"
@@ -79,10 +76,9 @@ def engine_cost_profitability(df_sales, df_sourcing):
         mask = df_sales['payment_status'].astype(str).str.contains('paid', case=False, na=False)
         paid_df = df_sales[mask]
         
-        # FIX 2: Use regex to strictly extract only numbers, decimals, and negative signs
-        rev_clean = paid_df.get('amount_paid', pd.Series(dtype=str)).astype(str).str.replace(r'[^\d.-]', '', regex=True)
-        cost_clean = paid_df.get('total_cost', pd.Series(dtype=str)).astype(str).str.replace(r'[^\d.-]', '', regex=True)
-        cour_clean = paid_df.get('courier_charge', pd.Series(dtype=str)).astype(str).str.replace(r'[^\d.-]', '', regex=True)
+        rev_clean = paid_df.get('amount_paid', pd.Series(dtype=str)).astype(str).str.replace(',', '')
+        cost_clean = paid_df.get('total_cost', pd.Series(dtype=str)).astype(str).str.replace(',', '')
+        cour_clean = paid_df.get('courier_charge', pd.Series(dtype=str)).astype(str).str.replace(',', '')
 
         revenue = pd.to_numeric(rev_clean, errors='coerce').fillna(0).astype(float)
         cost = pd.to_numeric(cost_clean, errors='coerce').fillna(0).astype(float)
@@ -100,11 +96,11 @@ def engine_cost_profitability(df_sales, df_sourcing):
 
     if not df_sourcing.empty and 'Date of Purchase' in df_sourcing.columns:
         try:
+            # Force timezone awareness (UTC) to match PostgreSQL
             df_sourcing['Date of Purchase'] = pd.to_datetime(df_sourcing['Date of Purchase'], errors='coerce', utc=True)
             cutoff = pd.Timestamp.now(tz='UTC') - pd.Timedelta(days=45)
             dead_stock = df_sourcing[df_sourcing['Date of Purchase'] < cutoff]
-            
-            amt_clean = dead_stock.get('Total Amount', pd.Series(dtype=str)).astype(str).str.replace(r'[^\d.-]', '', regex=True)
+            amt_clean = dead_stock.get('Total Amount', pd.Series(dtype=str)).astype(str).str.replace(',', '')
             dead_stock_capital = pd.to_numeric(amt_clean, errors='coerce').fillna(0).sum()
         except Exception:
             pass
@@ -120,6 +116,7 @@ def engine_cac_mom_growth(df_sales, weekly_marketing_spend):
     if df_paid.empty: return 0.0, 0, 0.0
 
     if 'created_at' in df_paid.columns:
+        # Force UTC to align with PostgreSQL TIMESTAMP WITH TIME ZONE
         df_paid['created_at'] = pd.to_datetime(df_paid['created_at'], format='mixed', errors='coerce', utc=True)
         cutoff = pd.Timestamp.now(tz='UTC') - pd.Timedelta(days=7)
         recent_sales = df_paid[df_paid['created_at'] >= cutoff]
@@ -131,12 +128,10 @@ def engine_cac_mom_growth(df_sales, weekly_marketing_spend):
     
     mom_growth = 0.0
     if 'created_at' in df_paid.columns and pd.api.types.is_datetime64_any_dtype(df_paid['created_at']):
+        # Convert tz-aware timestamps to naive before applying to_period('M') to prevent Pandas crash
         df_paid['Month'] = df_paid['created_at'].dt.tz_localize(None).dt.to_period('M')
-        
-        # FIX 2 Applied here as well
-        rev_clean = df_paid.get('amount_paid', pd.Series(dtype=str)).astype(str).str.replace(r'[^\d.-]', '', regex=True)
+        rev_clean = df_paid.get('amount_paid', pd.Series(dtype=str)).astype(str).str.replace(',', '')
         monthly_rev = pd.to_numeric(rev_clean, errors='coerce').groupby(df_paid['Month']).sum()
-        
         if len(monthly_rev) >= 2:
             mom_growth = monthly_rev.pct_change().iloc[-1] * 100.0
             
@@ -158,10 +153,9 @@ def generate_financial_charts(df_sales):
     else:
         df_trend = df_paid.copy()
 
-    # FIX 2: Strict regex string stripping applied to graph rendering
-    rev_c = df_trend.get('amount_paid', pd.Series(dtype=str)).astype(str).str.replace(r'[^\d.-]', '', regex=True)
-    cost_c = df_trend.get('total_cost', pd.Series(dtype=str)).astype(str).str.replace(r'[^\d.-]', '', regex=True)
-    cour_c = df_trend.get('courier_charge', pd.Series(dtype=str)).astype(str).str.replace(r'[^\d.-]', '', regex=True)
+    rev_c = df_trend.get('amount_paid', pd.Series(dtype=str)).astype(str).str.replace(',', '')
+    cost_c = df_trend.get('total_cost', pd.Series(dtype=str)).astype(str).str.replace(',', '')
+    cour_c = df_trend.get('courier_charge', pd.Series(dtype=str)).astype(str).str.replace(',', '')
 
     df_trend['Rev'] = pd.to_numeric(rev_c, errors='coerce').fillna(0).astype(float)
     df_trend['Cost'] = pd.to_numeric(cost_c, errors='coerce').fillna(0).astype(float)
