@@ -9,30 +9,76 @@ from data.storage import upload_to_cloudinary, delete_from_cloudinary
 from data.sourcing import compress_image, save_to_sourcing_vault, delete_from_sourcing_vault, restock_inventory
 from engines.marketing import auto_tag_jewelry
 
+# --- THE FROZEN CALLBACK ---
+def commit_to_vault_callback(sku, price, qty, tags, category, img_bytes, custom_std, custom_vip, custom_clr, svfk):
+    # 1. Hard Mutex Lock
+    if st.session_state.get(f"submitting_{svfk}", False):
+        return
+    st.session_state[f"submitting_{svfk}"] = True
+    
+    try:
+        # 2. HEAVY LIFTING: All execution happens here using the FROZEN arguments
+        compressed_bytes = compress_image(img_bytes)
+        cdn_url = upload_to_cloudinary(compressed_bytes, sku)
+
+        if "🚨" not in cdn_url:
+            combined_tags = f"{category}, {tags}" if tags else category
+            
+            final_std = custom_std if custom_std > 0 else float(price * 1.8)
+            final_vip = custom_vip if custom_vip > 0 else float(price * 1.5)
+            final_clr = custom_clr if custom_clr > 0 else float(price * 1.2)
+
+            is_saved = save_to_sourcing_vault(
+                sku, price, combined_tags, cdn_url, final_std, final_vip, final_clr, qty
+            )
+    
+            if is_saved:
+                # 3. Clean up the old dynamic keys before creating new ones
+                for key in list(st.session_state.keys()):
+                    if key.endswith(f"_{svfk}"):
+                        del st.session_state[key]
+                        
+                st.session_state.vault_form_key += 1
+                st.session_state["post_save_success"] = sku # Flag to trigger balloons in UI
+            else:
+                st.session_state["post_save_error"] = "⚠️ Failed to update database."
+        else:
+            st.session_state["post_save_error"] = cdn_url
+            
+    finally:
+        # 4. Release the lock
+        st.session_state[f"submitting_{svfk}"] = False
+
+
 def render_catalog():
     st.subheader("Point of Source (POS+)")
     st.caption("Snap a photo. Let the AI do the heavy lifting.")
-
-    # Initialize a dynamic key counter for rapid-fire resets
 
     if 'vault_form_key' not in st.session_state:
         st.session_state.vault_form_key = 0
     svfk = st.session_state.vault_form_key
 
-    # Pre-initialize the form fields in memory so the AI can safely overwrite them
+    # Success/Error UI Triggers from the callback
+    if "post_save_success" in st.session_state:
+        sku_saved = st.session_state.pop("post_save_success")
+        st.toast(f"✅ Saved {sku_saved}! Ready for next item.", icon="🎉")
+        st.balloons()
+        st.cache_data.clear()
+        
+    if "post_save_error" in st.session_state:
+        st.error(st.session_state.pop("post_save_error"))
+
     if f"vault_cat_{svfk}" not in st.session_state:
         st.session_state[f"vault_cat_{svfk}"] = "Choker Set"
     if f"vault_tags_{svfk}" not in st.session_state:
         st.session_state[f"vault_tags_{svfk}"] = ""
 
-    # --- STEP 1: CAPTURE ---
     with st.container(border=True):
         st.markdown("##### 📸 Step 1: Capture Item")
         camera_photo = st.camera_input("Take Photo", key=f"vault_cam_{svfk}")
         uploaded_photo = st.file_uploader("Or upload from gallery", type=["jpg", "png", "jpeg"], key=f"vault_upload_{svfk}")
         active_photo = camera_photo or uploaded_photo
 
-    # --- THE AI OBSERVER ---
     if active_photo:
         current_img_id = getattr(active_photo, 'file_id', 'live_camera_feed')
         if st.session_state.get(f"analyzed_img_{svfk}") != current_img_id:
@@ -47,8 +93,8 @@ def render_catalog():
                 st.session_state[f"analyzed_img_{svfk}"] = current_img_id
                 st.rerun()
 
-        # --- STEP 2: REVIEW & SAVE (Form blocks all UI refreshes!) ---
-        with st.form(key=f"save_item_form_{svfk}", clear_on_submit=True):
+        # NOTE: Removed clear_on_submit=True so we control exactly when the form resets
+        with st.form(key=f"save_item_form_{svfk}"):
             st.markdown("##### 📝 Step 2: Verify & Price")
             st.info("The AI has pre-filled the category and tags. Just add the cost!")
             
@@ -68,7 +114,6 @@ def render_catalog():
 
             st.divider()
 
-            # Restoring Custom Pricing safely inside a Form
             with st.expander("⚙️ (click here) to Enter your Custom Pricing", expanded=False):
                 st.caption("Leave at ₹0.0 to auto-calculate (1.8x, 1.5x, 1.2x). Enter a value to set a custom price.")
                 p_col1, p_col2, p_col3 = st.columns(3)
@@ -77,52 +122,21 @@ def render_catalog():
                 custom_clr_override = p_col3.number_input("Clearance (₹)", min_value=0.0, step=50.0, value=0.0)
 
             generated_sku = f"JK-{int(time.time())}-{uuid.uuid4().hex[:4].upper()}"
+            img_bytes = active_photo.getvalue()
     
-            # CONCURRENCY FIX: Lock the button after the first click to prevent double-DB entries
-            save_btn = st.form_submit_button("💾 Save to Vault", type="primary", use_container_width=True, disabled=st.session_state.get(f"submitting_{svfk}", False))
-
-            if save_btn:
-                st.session_state[f"submitting_{svfk}"] = True # Lock UI
-                with st.spinner("Securing to database..."):
-                    raw_bytes = active_photo.getvalue()
-                    compressed_bytes = compress_image(raw_bytes)
-                    cdn_url = upload_to_cloudinary(compressed_bytes, generated_sku)
-
-                    if "🚨" not in cdn_url:
-                        combined_tags = f"{category}, {raw_tags}" if raw_tags else category
-                        
-                        final_std = custom_std_override if custom_std_override > 0 else float(sourcing_price * 1.8)
-                        final_vip = custom_vip_override if custom_vip_override > 0 else float(sourcing_price * 1.5)
-                        final_clr = custom_clr_override if custom_clr_override > 0 else float(sourcing_price * 1.2)
-
-                        is_saved = save_to_sourcing_vault(
-                            generated_sku, 
-                            sourcing_price, 
-                            combined_tags, 
-                            cdn_url, 
-                            final_std, 
-                            final_vip, 
-                            final_clr,
-                            stock_qty
-                        )
-                
-                        if is_saved:
-                            # MEMORY FIX: Clean up the old dynamic keys before creating new ones
-                            for key in list(st.session_state.keys()):
-                                if key.endswith(f"_{svfk}"):
-                                    del st.session_state[key]
-                                    
-                            st.session_state.vault_form_key += 1
-                            st.toast(f"✅ Saved {generated_sku}! Ready for next item.", icon="🎉")
-                            st.balloons() 
-                            st.cache_data.clear() 
-                            st.rerun() 
-                        else:
-                            st.error("⚠️ Failed to update database.")
-                            st.session_state[f"submitting_{svfk}"] = False # Unlock on failure
-                    else:
-                        st.error(cdn_url)
-                        st.session_state[f"submitting_{svfk}"] = False # Unlock on failure
+            # CONCURRENCY FIX: Pass the frozen widget values explicitly into the callback
+            st.form_submit_button(
+                "💾 Save to Vault", 
+                type="primary", 
+                on_click=commit_to_vault_callback, 
+                args=(
+                    generated_sku, sourcing_price, stock_qty, raw_tags, 
+                    category, img_bytes, custom_std_override, 
+                    custom_vip_override, custom_clr_override, svfk
+                ),
+                use_container_width=True, 
+                disabled=st.session_state.get(f"submitting_{svfk}", False)
+            )
 
     # 3. Recently Cataloged Mini-Gallery
     st.divider()
@@ -130,7 +144,6 @@ def render_catalog():
 
     vault_df = BusinessRepository.get_sourcing_data()
     if not vault_df.empty:
-        # MOBILE UPGRADE: Category & Soft Archival Filters
         col_filt1, col_filt2 = st.columns([1.5, 1])
         with col_filt1:
             filter_cat = st.selectbox(
@@ -142,17 +155,12 @@ def render_catalog():
         with col_filt2:
             hide_sold_out = st.toggle("Hide Sold Out", value=True)
 
-        # Apply Pandas filtering logic based on selections
         display_df = vault_df.copy()
-
-        # 1. Soft Archival Filter
-        # Returns an empty Pandas Series instead of an integer if the column is missing
         display_df['Stock_Quantity'] = pd.to_numeric(display_df.get('Stock_Quantity', pd.Series(dtype=float)), errors='coerce').fillna(0)
         
         if hide_sold_out:
             display_df = display_df[display_df['Stock_Quantity'] > 0]
 
-        # 2. Category Filter
         if filter_cat != "All":
             display_df = display_df[display_df['tags'].astype(str).str.contains(filter_cat, case=False, na=False)]
 
@@ -165,18 +173,13 @@ def render_catalog():
                     with st.container(border=True):
                         img_val = item.get('image_url')
 
-                        # Strictly check for actual URLs and ignore NULLs, NaNs, or literal "None" strings
-
                         if pd.notna(img_val) and str(img_val).strip() != "" and str(img_val).strip().lower() != "none":
                             st.image(str(img_val).strip(), use_column_width=True)
 
                         sku_val = item.get('Item_SKU', 'N/A')
                         st.code(sku_val, language=None)
-
-                        # MOBILE UPGRADE: Visual Stock Badges
-                        #  
-                        current_stock = int(item.get('Stock_Quantity', 0))
                         
+                        current_stock = int(item.get('Stock_Quantity', 0))
                         if current_stock >= 3:
                             st.markdown(f"**🟢 In Stock ({current_stock})**")
                         elif current_stock > 0:
@@ -190,7 +193,6 @@ def render_catalog():
                         if tags:
                             st.caption(f"🏷️ {tags}")
 
-                        # UPGRADE: The Restock Loop
                         with st.expander("📦 Restock Item"):
                             r_col1, r_col2 = st.columns([2, 3])
                             with r_col1:
