@@ -1,79 +1,196 @@
-import streamlit as st
-from engines.financials import engine_cost_profitability, engine_cac_mom_growth, generate_financial_charts
+import json, ast
+import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
 
-def render_profitability(df_sales, df_sourcing, weekly_spend):
-    st.subheader("Current Financial Health")
-    if not df_sales.empty and not df_sourcing.empty:
-        # 1. Run core calculations
-        sales, profit, top_item, dead_capital = engine_cost_profitability(df_sales, df_sourcing)
-        cac, new_clients, mom = engine_cac_mom_growth(df_sales, weekly_spend)
+def get_col_safe(df, possible_names):
+    """Case-insensitive column extraction to prevent silent Pandas misses."""
+    lower_targets = [n.lower() for n in possible_names]
+    for col in df.columns:
+        if str(col).lower() in lower_targets:
+            return df[col].copy()
+    return pd.Series(0, index=df.index)
 
-        # 2. Defensive Input Checks & Feedback
-        if weekly_spend > 1_00_000:
-            st.error("🚨 The amount entered is exceptionally high (over ₹1 Lakh). Please verify the value in the sidebar.")
+def extract_cart_data(df_sales):
+    """Extracts cart data safely, handling legacy strings without crashing."""
+    payment_col = get_col_safe(df_sales, ['payment_status', 'status'])
+    mask = payment_col.astype(str).str.contains('paid', case=False, na=False)
+    df_paid = df_sales[mask].copy()
+    
+    schema_columns = ['Category', 'Display_Category', 'Quantity']
+    
+    line_items_col = get_col_safe(df_paid, ['line_items', 'cart'])
+    if df_paid.empty or line_items_col.sum() == 0:
+        return pd.DataFrame(columns=schema_columns)
 
-        # 3. Growth & Acquisition Section
-        st.markdown("##### 🚀 Growth & Acquisition (Last 7 Days)")
-        metric_col1, metric_col2, metric_col3 = st.columns(3)
-        metric_col1.metric("MoM Revenue Growth", f"{mom:,.1f}%", delta=f"{mom:,.1f}%", delta_color="normal")
-        metric_col2.metric("New Clients Acquired", new_clients)
-
-        if weekly_spend > 0:
-            ui_cac_label = f"₹{cac:,.2f}"
-            wa_cac_label = f"₹{cac:,.2f}"
-            cac_delta = "Spend per Client"
-        else:
-            ui_cac_label = "₹0 " 
-            wa_cac_label = "₹0 "
-            cac_delta = "Spend per Client"
-        metric_col3.metric("Customer Acquisition Cost (CAC)", ui_cac_label, delta=cac_delta, delta_color="inverse")
-        
-        st.divider()
-
-        # 4. Core Financial KPIs
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Realized Revenue", f"₹{sales:,.0f}")
-        col2.metric("True Net Profit", f"₹{profit:,.0f}")
-        
-        # UI FALLBACK: Prevent printing "N/A"
-        clean_top_item = top_item if top_item != "N/A" else "Insufficient Data"
-        col3.metric("Top Performer", clean_top_item)
-        col4.metric("⚠️ 45-Day Dead Stock", f"₹{dead_capital:,.0f}", delta="Capital Trapped", delta_color="inverse")
-        
-        st.divider()
-
-        # 5. Interactive Charts (STRICT NULL HANDLING)
-        fig_trend, fig_donut = generate_financial_charts(df_sales)
-        
-        # Explicitly check that the variables contain valid Plotly objects, not None
-        if fig_trend is not None and fig_donut is not None:
-            chart_col1, chart_col2 = st.columns([3, 2])
-            with chart_col1:
-                st.plotly_chart(fig_trend, use_container_width=True)
-            with chart_col2:
-                st.plotly_chart(fig_donut, use_container_width=True)
-            st.divider()
-        else:
-            st.info("📉 Not enough paid transactions yet to generate trend charts. Keep selling!")
-            st.divider()
-
-        st.markdown("#### 📱 Weekly WhatsApp Summary")
-        st.info("Copy this summary to send directly to the business owner.")
-        
-        summary_text = (
-            f"📊 *Weekly Operations Update*\n"
-            f"Total Sales: ₹{sales:,.0f}\n"
-            f"True Profit: ₹{profit:,.0f}\n"
-            f"🚀 MoM Growth: {mom:,.1f}%\n"
-            f"🎯 CAC: {wa_cac_label}/client (₹{weekly_spend:,.2f} total spend)\n"
-        )
-        
-        # CLEAN FALLBACK: Conditionally add the performer line only if data exists
-        if top_item != "N/A":
-            summary_text += f"🔥 Top Performer: {top_item}\n"
+    all_items = []
+    for _, row_val in line_items_col.items():
+        if row_val is None or (isinstance(row_val, float) and pd.isna(row_val)):
+            continue
             
-        summary_text += f"⚠️ Note: You have ₹{dead_capital:,.0f} tied up in stock older than 45 days. Consider discounting older pieces on the next live!"
+        if isinstance(row_val, (list, dict)):
+            parsed = row_val
+        else:
+            val_str = str(row_val).strip()
+            if not val_str or val_str.lower() == 'nan':
+                continue
+            try:
+                parsed = json.loads(val_str)
+            except Exception:
+                try:
+                    parsed = ast.literal_eval(val_str)
+                except Exception:
+                    continue
+
+        if isinstance(parsed, dict):
+            parsed = [parsed]
+            
+        if isinstance(parsed, list):
+            for item in parsed:
+                if not isinstance(item, dict):
+                    continue
+                    
+                safe_item = {str(k).lower(): v for k, v in item.items()}
+                
+                cat = str(safe_item.get('category', 'Unknown')).strip().title()
+                det = str(safe_item.get('custom details', safe_item.get('custom_details', ''))).strip().title()
+                
+                disp_cat = cat
+                if cat == 'Other' and det and det.lower() != 'nan':
+                    disp_cat = f"Other: {det[:15]}"
+                    
+                raw_qty = safe_item.get('quantity', safe_item.get('qty', 1))
+                try:
+                    qty = float(raw_qty)
+                except ValueError:
+                    qty = 1.0
+                    
+                all_items.append({
+                    'Category': cat,
+                    'Display_Category': disp_cat,
+                    'Quantity': qty
+                })
+
+    if not all_items: 
+        return pd.DataFrame(columns=schema_columns)
+
+    return pd.DataFrame(all_items, columns=schema_columns)
+
+def engine_cost_profitability(df_sales, df_sourcing):
+    total_sales, true_profit, dead_stock_capital = 0.0, 0.0, 0.0
+    top_performer = "N/A"
+    
+    payment_col = get_col_safe(df_sales, ['payment_status', 'status'])
+    if not df_sales.empty:
+        mask = payment_col.astype(str).str.contains('paid', case=False, na=False)
+        paid_df = df_sales[mask]
         
-        st.code(summary_text, language="markdown")
-    else:
-        st.warning("Insufficient data to calculate profitability.")
+        rev_clean = get_col_safe(paid_df, ['amount_paid', 'total_amount', 'amount']).astype(str).str.replace(r'[^\d.-]', '', regex=True)
+        cost_clean = get_col_safe(paid_df, ['total_cost', 'cost']).astype(str).str.replace(r'[^\d.-]', '', regex=True)
+        cour_clean = get_col_safe(paid_df, ['courier_charge', 'courier']).astype(str).str.replace(r'[^\d.-]', '', regex=True)
+
+        revenue = pd.to_numeric(rev_clean, errors='coerce').fillna(0).astype(float)
+        cost = pd.to_numeric(cost_clean, errors='coerce').fillna(0).astype(float)
+        courier = pd.to_numeric(cour_clean, errors='coerce').fillna(0).astype(float)
+        
+        total_sales = revenue.sum()
+        true_profit = (revenue - cost - courier).sum()
+            
+    items_df = extract_cart_data(df_sales)
+    if not items_df.empty and 'Category' in items_df.columns:
+        category_totals = items_df.groupby('Category')['Quantity'].sum()
+        if not category_totals.empty:
+            top_performer = str(category_totals.idxmax())
+
+    date_col = get_col_safe(df_sourcing, ['date of purchase', 'created_at', 'date'])
+    if not df_sourcing.empty and date_col.sum() != 0:
+        try:
+            df_sourcing['Safe_Date'] = pd.to_datetime(date_col, errors='coerce', utc=True)
+            cutoff = pd.Timestamp.now(tz='UTC') - pd.Timedelta(days=45)
+            dead_stock = df_sourcing[df_sourcing['Safe_Date'] < cutoff]
+            
+            amt_clean = get_col_safe(dead_stock, ['total amount', 'sourcing_price', 'cost']).astype(str).str.replace(r'[^\d.-]', '', regex=True)
+            dead_stock_capital = pd.to_numeric(amt_clean, errors='coerce').fillna(0).sum()
+        except Exception:
+            pass
+            
+    return total_sales, true_profit, top_performer, dead_stock_capital
+
+def engine_cac_mom_growth(df_sales, weekly_marketing_spend):
+    payment_col = get_col_safe(df_sales, ['payment_status', 'status'])
+    mask = payment_col.astype(str).str.contains('paid', case=False, na=False)
+    df_paid = df_sales[mask].copy()
+    
+    if df_paid.empty: return 0.0, 0, 0.0
+
+    created_col = get_col_safe(df_paid, ['created_at', 'date_logged', 'date'])
+    df_paid['Safe_Date'] = pd.to_datetime(created_col, format='mixed', errors='coerce', utc=True)
+    cutoff = pd.Timestamp.now(tz='UTC') - pd.Timedelta(days=7)
+    recent_sales = df_paid[df_paid['Safe_Date'] >= cutoff]
+        
+    handle_col = get_col_safe(recent_sales, ['handle', 'instagram', 'client'])
+    new_clients = handle_col.nunique() if not recent_sales.empty else 0
+    cac = (weekly_marketing_spend / new_clients) if new_clients > 0 else weekly_marketing_spend
+    
+    mom_growth = 0.0
+    if pd.api.types.is_datetime64_any_dtype(df_paid['Safe_Date']):
+        df_paid['Month'] = df_paid['Safe_Date'].dt.tz_localize(None).dt.to_period('M')
+        rev_clean = get_col_safe(df_paid, ['amount_paid', 'total_amount', 'amount']).astype(str).str.replace(r'[^\d.-]', '', regex=True)
+        
+        monthly_rev = pd.to_numeric(rev_clean, errors='coerce').groupby(df_paid['Month']).sum()
+        if len(monthly_rev) >= 2:
+            mom_growth = monthly_rev.pct_change().iloc[-1] * 100.0
+            
+    return cac, new_clients, mom_growth
+
+def generate_financial_charts(df_sales):
+    """Generates Plotly charts utilizing pure Python lists to bypass Plotly/Pandas metadata indexing bugs."""
+    empty_fig = go.Figure()
+    empty_fig.update_layout(title="No Data Available")
+    
+    if df_sales.empty: return empty_fig, empty_fig
+        
+    payment_col = get_col_safe(df_sales, ['payment_status', 'status'])
+    mask = payment_col.astype(str).str.contains('paid', case=False, na=False)
+    df_paid = df_sales[mask].copy()
+    
+    if df_paid.empty: return empty_fig, empty_fig
+
+    created_col = get_col_safe(df_paid, ['created_at', 'date_logged', 'date'])
+    df_paid['Safe_Date'] = pd.to_datetime(created_col, format='mixed', errors='coerce', utc=True)
+    cutoff = pd.Timestamp.now(tz='UTC') - pd.Timedelta(days=90)
+    df_trend = df_paid[df_paid['Safe_Date'] >= cutoff].copy()
+
+    rev_c = get_col_safe(df_trend, ['amount_paid', 'total_amount', 'amount']).astype(str).str.replace(r'[^\d.-]', '', regex=True)
+    cost_c = get_col_safe(df_trend, ['total_cost', 'cost']).astype(str).str.replace(r'[^\d.-]', '', regex=True)
+    cour_c = get_col_safe(df_trend, ['courier_charge', 'courier']).astype(str).str.replace(r'[^\d.-]', '', regex=True)
+
+    df_trend['Rev'] = pd.to_numeric(rev_c, errors='coerce').fillna(0).astype(float)
+    df_trend['Cost'] = pd.to_numeric(cost_c, errors='coerce').fillna(0).astype(float)
+    df_trend['Cour'] = pd.to_numeric(cour_c, errors='coerce').fillna(0).astype(float)
+    df_trend['True Profit'] = df_trend['Rev'] - (df_trend['Cost'] + df_trend['Cour'])
+
+    # 1. Standard GroupBy (No named aggregations)
+    df_grouped = df_trend.groupby(df_trend['Safe_Date'].dt.date)[['Rev', 'True Profit']].sum().reset_index()
+
+    # 2. PURE LIST COERCION: This forces Plotly to render the actual money, not the DataFrame index.
+    x_dates = df_grouped['Safe_Date'].tolist()
+    y_rev = df_grouped['Rev'].tolist()
+    y_prof = df_grouped['True Profit'].tolist()
+
+    fig_trend = go.Figure()
+    fig_trend.add_trace(go.Scatter(x=x_dates, y=y_rev, mode='lines+markers', name='Gross Revenue', line=dict(color='#800000', width=3)))
+    fig_trend.add_trace(go.Scatter(x=x_dates, y=y_prof, mode='lines+markers', name='True Net Profit', line=dict(color='#2E7D32', width=3)))
+    fig_trend.update_layout(title="📈 Revenue vs. Net Profit Trends", hovermode="x unified", margin=dict(l=20, r=20, t=50, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+
+    fig_donut = empty_fig
+    items_df = extract_cart_data(df_sales)
+    
+    if not items_df.empty and 'Display_Category' in items_df.columns:
+        category_sales = items_df.groupby('Display_Category')['Quantity'].sum().reset_index()   
+        category_sales['Quantity'] = category_sales['Quantity'].astype(float)
+        
+        fig_donut = px.pie(category_sales, values='Quantity', names='Display_Category', hole=0.45)
+        fig_donut.update_layout(title="Sales Distribution by Category", margin=dict(t=40, b=10, l=10, r=10))
+
+    return fig_trend, fig_donut
