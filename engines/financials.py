@@ -147,8 +147,8 @@ def engine_cac_mom_growth(df_sales, weekly_marketing_spend):
     return cac, new_clients, mom_growth
 
 def generate_financial_charts(df_sales):
-    """Generates Plotly charts. Returns empty go.Figure() objects on failure to protect Streamlit."""
-    # FIX: Streamlit compatibility. Never return None.
+    """Generates Plotly charts with an injected QA diagnostic X-Ray."""
+    import streamlit as st
     empty_fig = go.Figure()
     empty_fig.update_layout(title="No Data Available")
     
@@ -165,8 +165,9 @@ def generate_financial_charts(df_sales):
     cutoff = pd.Timestamp.now(tz='UTC') - pd.Timedelta(days=90)
     df_trend = df_paid[df_paid['Safe_Date'] >= cutoff].copy()
 
-    rev_c = get_col_safe(df_trend, ['amount_paid', 'total_amount', 'amount']).astype(str).str.replace(r'[^\d.-]', '', regex=True)
-    cost_c = get_col_safe(df_trend, ['total_cost', 'cost']).astype(str).str.replace(r'[^\d.-]', '', regex=True)
+    # Data Extraction
+    rev_c = get_col_safe(df_trend, ['amount_paid', 'total_amount', 'amount', 'grand_total', 'revenue']).astype(str).str.replace(r'[^\d.-]', '', regex=True)
+    cost_c = get_col_safe(df_trend, ['total_cost', 'cost', 'sourcing_price']).astype(str).str.replace(r'[^\d.-]', '', regex=True)
     cour_c = get_col_safe(df_trend, ['courier_charge', 'courier']).astype(str).str.replace(r'[^\d.-]', '', regex=True)
 
     df_trend['Rev'] = pd.to_numeric(rev_c, errors='coerce').fillna(0).astype(float)
@@ -174,7 +175,6 @@ def generate_financial_charts(df_sales):
     df_trend['Cour'] = pd.to_numeric(cour_c, errors='coerce').fillna(0).astype(float)
     df_trend['True Profit'] = df_trend['Rev'] - (df_trend['Cost'] + df_trend['Cour'])
 
-    # FIX: Ensure dates are processed cleanly so Plotly axes scale correctly
     df_grouped = df_trend.groupby(df_trend['Safe_Date'].dt.date).agg(
         Gross_Revenue=('Rev', 'sum'),
         True_Profit=('True Profit', 'sum')
@@ -183,14 +183,24 @@ def generate_financial_charts(df_sales):
     df_grouped['Gross_Revenue'] = df_grouped['Gross_Revenue'].astype(float)
     df_grouped['True_Profit'] = df_grouped['True_Profit'].astype(float)
 
+    items_df = extract_cart_data(df_sales)
+
+    # 🚨 QA DIAGNOSTIC INJECTION 🚨
+    with st.expander("🛠️ QA Diagnostics: Financial Data X-Ray", expanded=True):
+        st.warning("Check the 'Rev' column below. If it shows 1, 2, 3 instead of actual rupee amounts, the database column name is mismatched.")
+        st.write("**1. Raw Columns Found in Ledger:**", df_sales.columns.tolist())
+        st.write("**2. Computed Math (What the Line Chart sees):**")
+        st.dataframe(df_trend[['Safe_Date', 'Rev', 'Cost', 'Cour', 'True Profit']])
+        st.write("**3. Cart Extraction (What the Pie Chart sees):**")
+        st.dataframe(items_df)
+
+    # Chart Rendering
     fig_trend = go.Figure()
     fig_trend.add_trace(go.Scatter(x=df_grouped['Safe_Date'], y=df_grouped['Gross_Revenue'], mode='lines+markers', name='Gross Revenue', line=dict(color='#800000', width=3)))
     fig_trend.add_trace(go.Scatter(x=df_grouped['Safe_Date'], y=df_grouped['True_Profit'], mode='lines+markers', name='True Net Profit', line=dict(color='#2E7D32', width=3)))
     fig_trend.update_layout(title="📈 Revenue vs. Net Profit Trends", hovermode="x unified", margin=dict(l=20, r=20, t=50, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
 
     fig_donut = empty_fig
-    items_df = extract_cart_data(df_sales)
-    
     if not items_df.empty and 'Display_Category' in items_df.columns:
         category_sales = items_df.groupby('Display_Category')['Quantity'].sum().reset_index()   
         category_sales['Quantity'] = category_sales['Quantity'].astype(float)
