@@ -9,3 +9,4 @@ google-genai
 google-api-python-client
 cloudinary
 cryptography>=41.0.0
+psycopg[binary]
