@@ -1,23 +1,21 @@
-import os, pathlib
+import os, shutil, pathlib
 
-# 🔒 Render Secret Bridge: Force sync all Render /etc/secrets into Streamlit secrets.toml
+# 🔒 Render Secret Bridge: Copy secrets cleanly without duplications
 sec_dir = pathlib.Path(".streamlit")
 sec_dir.mkdir(exist_ok=True)
 sec_file = sec_dir / "secrets.toml"
 
 if os.path.exists("/etc/secrets"):
-    combined_toml = ""
-    for root, _, files in os.walk("/etc/secrets"):
-        for f in files:
-            file_path = os.path.join(root, f)
-            try:
-                with open(file_path, "r", encoding="utf-8") as src:
-                    combined_toml += src.read() + "\n"
-            except Exception:
-                pass
-    if combined_toml.strip():
-        with open(sec_file, "w", encoding="utf-8") as dst:
-            dst.write(combined_toml)
+    render_secrets = pathlib.Path("/etc/secrets/secrets.toml")
+    if render_secrets.exists():
+        shutil.copy(render_secrets, sec_file)
+    else:
+        # Fallback to the first file found in /etc/secrets
+        for f in os.listdir("/etc/secrets"):
+            src = pathlib.Path("/etc/secrets") / f
+            if src.is_file():
+                shutil.copy(src, sec_file)
+                break
 import time
 import streamlit as st
 import hashlib
